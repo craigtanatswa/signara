@@ -1,0 +1,103 @@
+---
+description: Signara brand design system — colours, typography, logo placement, and UX principles. Always apply when building any UI component, page, or layout.
+alwaysApply: true
+---
+
+# Signara Design System
+
+## Brand Palette
+
+| Token | Hex | Usage |
+|-------|-----|-------|
+| `signara-navy` | `#0F2C59` | Primary brand, headings, sidebars, nav backgrounds, body text |
+| `signara-gold` | `#D4AF37` | Accent, CTAs, active wizard steps, highlights, hover states, icons |
+| `signara-steel` | `#A1A8A2` | Borders, secondary text, metallic UI accents, dividers |
+| `signara-background` | `#F8F9FA` | Main canvas / page background |
+| White | `#FFFFFF` | Cards, modals, input backgrounds |
+
+The logo uses **deep navy** script text + a **gold/brass fountain pen nib** — every UI decision must honour this pairing.
+
+## CSS Variables (shadcn/Tailwind layer base)
+
+```css
+@layer base {
+  :root {
+    --background: 210 20% 98%;        /* #F8F9FA */
+    --card: 0 0% 100%;
+    --popover: 0 0% 100%;
+    --primary: 216 71% 20%;           /* #0F2C59 navy */
+    --primary-foreground: 210 20% 98%;
+    --accent: 46 65% 52%;             /* #D4AF37 gold */
+    --accent-foreground: 216 71% 20%;
+    --border: 129 4% 65%;             /* #A1A8A2 steel */
+    --input: 129 4% 65%;
+    --ring: 216 71% 20%;
+    --foreground: 216 71% 20%;
+    --muted: 129 4% 65%;
+    --muted-foreground: 215 15% 40%;
+  }
+}
+```
+
+## Tailwind Config Extension
+
+```js
+colors: {
+  signara: {
+    navy:       '#0F2C59',
+    gold:       '#D4AF37',
+    steel:      '#A1A8A2',
+    background: '#F8F9FA',
+  },
+},
+```
+
+## Logo
+
+- File: `public/assets/logo-signara.png`
+- **Always** place the logo in the top-left of the main navigation / header bar.
+- Use on a white or `#F8F9FA` background only — never on dark or coloured backgrounds unless a white/light variant is created.
+- Maintain aspect ratio; minimum rendered width: **120 px**. Preferred header width: **160 px**.
+- Add `alt="Signara"` on all `<img>` logo elements.
+
+## Component Colour Rules
+
+### Navigation / Sidebar
+- Background: `signara-navy` (`#0F2C59`)
+- Text & icons: white
+- Active/hover item: gold left-border accent (`border-l-2 border-signara-gold`) + light navy highlight
+
+### Buttons
+- **Primary CTA**: `bg-signara-gold text-signara-navy font-semibold` — hover: slightly darker gold (`#C49B2E`)
+- **Secondary**: `border border-signara-navy text-signara-navy` — hover: `bg-signara-navy text-white`
+- **Destructive**: standard red, not brand gold
+
+### Cards & Panels
+- Background: white with `border border-signara-steel/30` and subtle `shadow-sm`
+- Card headings: `text-signara-navy font-semibold`
+- Accent line/divider on important cards: `border-t-2 border-signara-gold`
+
+### Forms & Inputs
+- Border: `border-signara-steel` → focus: `ring-2 ring-signara-navy`
+- Labels: `text-signara-navy font-medium`
+
+### Wizard / Step indicators
+- Completed step: `bg-signara-gold text-signara-navy`
+- Active step: `bg-signara-navy text-white ring-2 ring-signara-gold`
+- Inactive step: `bg-signara-steel/30 text-signara-steel`
+
+### Typography
+- Headings: `text-signara-navy font-bold` (or `font-semibold` for sub-headings)
+- Body text: `text-signara-navy` (dark navy, not black)
+- Muted/helper text: `text-signara-steel`
+- Links: `text-signara-gold hover:underline`
+
+## UX Principles
+
+1. **Premium feel** — generous whitespace, clean lines, no clutter. Signara is a professional document-signing product.
+2. **Gold as a reward signal** — use gold sparingly for the most important interactive elements (primary CTA, active state, success confirmation). Never use gold as a background fill for large areas.
+3. **Navy anchors trust** — use navy to frame structure (nav, headers, footers, section titles). It conveys authority and reliability.
+4. **Steel for supporting roles** — borders, placeholders, secondary labels. Keep it subtle.
+5. **Consistent hierarchy** — every screen must have one clear primary action (gold button). Secondary actions use the outlined navy style.
+6. **Accessible contrast** — navy on white and gold on navy both pass WCAG AA. Always verify text on steel backgrounds.
+7. **Responsive first** — mobile-friendly layouts from the start; sidebar collapses to a drawer on small screens.
