@@ -6,7 +6,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2, ShieldCheck } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { updatePassword } from '@/app/actions/profile'
+import { SuccessModal } from '@/components/ui/success-modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -28,6 +29,7 @@ type ChangePasswordFormValues = z.infer<typeof changePasswordSchema>
 export default function ChangePasswordPage() {
   const router = useRouter()
   const [serverError, setServerError] = useState<string | null>(null)
+  const [successOpen, setSuccessOpen] = useState(false)
 
   const {
     register,
@@ -39,33 +41,28 @@ export default function ChangePasswordPage() {
 
   async function onSubmit(values: ChangePasswordFormValues) {
     setServerError(null)
-    const supabase = createClient()
 
-    const { error: updateError } = await supabase.auth.updateUser({
-      password: values.newPassword,
-    })
+    try {
+      const result = await updatePassword(values.newPassword)
 
-    if (updateError) {
-      setServerError(updateError.message)
-      return
+      if (!result.success) {
+        setServerError(result.error)
+        return
+      }
+
+      setSuccessOpen(true)
+    } catch {
+      setServerError('Unable to update password. Please try again.')
     }
+  }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (user) {
-      await supabase
-        .from('users')
-        .update({ must_change_password: false })
-        .eq('id', user.id)
-    }
-
+  function handleSuccessConfirm() {
     router.push('/dashboard')
     router.refresh()
   }
 
   return (
+    <>
     <div className="space-y-8">
       <div className="flex flex-col items-center space-y-3 text-center">
         <div className="flex size-14 items-center justify-center rounded-full bg-signara-navy/10">
@@ -138,7 +135,8 @@ export default function ChangePasswordPage() {
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="w-full bg-signara-gold text-signara-navy font-semibold hover:bg-[#C49B2E] disabled:opacity-60"
+          variant="signara"
+          className="w-full"
         >
           {isSubmitting ? (
             <>
@@ -151,5 +149,15 @@ export default function ChangePasswordPage() {
         </Button>
       </form>
     </div>
+
+      <SuccessModal
+        open={successOpen}
+        onOpenChange={setSuccessOpen}
+        title="Password set"
+        description="Your new password has been saved. You can now access your dashboard."
+        confirmLabel="Continue to dashboard"
+        onConfirm={handleSuccessConfirm}
+      />
+    </>
   )
 }

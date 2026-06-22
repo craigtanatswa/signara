@@ -66,15 +66,15 @@ export function Sidebar({ user, organisation }: SidebarProps) {
 
   return (
     <aside className="flex h-screen w-60 flex-col bg-signara-navy">
-      {/* Logo */}
-      <div className="flex h-16 items-center border-b border-white/10 px-5">
+      {/* Logo — cropped asset, 4/5 of section width */}
+      <div className="flex h-16 shrink-0 items-center justify-center border-b border-r border-border bg-signara-offwhite">
         <Image
-          src="/assets/logo-signara.png"
+          src="/assets/logo-signara-sidebar.png"
           alt="Signara"
-          width={130}
-          height={40}
-          className="h-9 w-auto brightness-0 invert"
+          width={368}
+          height={160}
           priority
+          className="h-4/5 w-4/5 object-contain"
         />
       </div>
 

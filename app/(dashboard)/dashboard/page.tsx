@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
+import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
 import { FileText, Clock, CheckCircle2 } from 'lucide-react'
 import type { User } from '@/types/database'
 
@@ -38,7 +39,8 @@ export default async function DashboardPage() {
   const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
-  const [pendingResult, sentResult, completedResult, recentResult] =
+  // Fetch step doc IDs separately to avoid unsupported PostgREST subquery syntax
+  const [pendingResult, sentResult, completedResult, stepDocIdsResult, initiatedDocsResult] =
     await Promise.all([
       supabase
         .from('document_steps')
@@ -56,11 +58,13 @@ export default async function DashboardPage() {
         .eq('status', 'completed')
         .gte('completed_at', startOfMonth),
       supabase
+        .from('document_steps')
+        .select('document_id')
+        .eq('assignee_user_id', authUser.id),
+      supabase
         .from('documents')
         .select('id, title, status, created_at')
-        .or(
-          `initiated_by.eq.${authUser.id},id.in.(select document_id from document_steps where assignee_user_id='${authUser.id}')`
-        )
+        .eq('initiated_by', authUser.id)
         .order('created_at', { ascending: false })
         .limit(5),
     ])
@@ -68,7 +72,30 @@ export default async function DashboardPage() {
   const pendingCount = pendingResult.count ?? 0
   const sentCount = sentResult.count ?? 0
   const completedCount = completedResult.count ?? 0
-  const recentDocuments = recentResult.data ?? []
+
+  // Merge initiated docs with docs assigned via steps, deduplicated, newest 5
+  const stepDocIds = (stepDocIdsResult.data ?? []).map((r: { document_id: string }) => r.document_id)
+  const initiatedDocs = initiatedDocsResult.data ?? []
+
+  let recentDocuments = initiatedDocs
+
+  if (stepDocIds.length > 0) {
+    const { data: stepDocs } = await supabase
+      .from('documents')
+      .select('id, title, status, created_at')
+      .in('id', stepDocIds)
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    const seen = new Set(initiatedDocs.map((d: { id: string }) => d.id))
+    const merged = [...initiatedDocs]
+    for (const doc of stepDocs ?? []) {
+      if (!seen.has(doc.id)) merged.push(doc)
+    }
+    recentDocuments = merged
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 5)
+  }
 
   const stats = [
     {
@@ -106,7 +133,8 @@ export default async function DashboardPage() {
     <>
       <Header pageTitle="Dashboard" user={user} />
 
-      <div className="mt-6 space-y-8">
+      <DashboardPageBody>
+      <div className="space-y-8">
         {/* Welcome */}
         <div>
           <h2 className="text-2xl font-bold text-signara-navy">
@@ -193,6 +221,7 @@ export default async function DashboardPage() {
           )}
         </div>
       </div>
+      </DashboardPageBody>
     </>
   )
 }

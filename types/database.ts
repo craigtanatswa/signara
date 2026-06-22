@@ -73,6 +73,7 @@ export interface Notification {
   user_id: string
   document_id: string | null
   type: string
+  title: string | null
   message: string
   read: boolean
   created_at: string

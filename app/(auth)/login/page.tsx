@@ -124,7 +124,8 @@ export default function LoginPage() {
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="w-full bg-signara-gold text-signara-navy font-semibold hover:bg-[#C49B2E] disabled:opacity-60"
+          variant="signara"
+          className="w-full"
         >
           {isSubmitting ? (
             <>

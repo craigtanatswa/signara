@@ -179,7 +179,8 @@ export default function RegisterPage() {
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="mt-2 w-full bg-signara-gold text-signara-navy font-semibold hover:bg-[#C49B2E] disabled:opacity-60"
+          variant="signara"
+          className="mt-2 w-full"
         >
           {isSubmitting ? (
             <>

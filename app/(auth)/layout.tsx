@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import { AuthPromoRotator } from '@/components/auth/auth-promo-rotator'
 
 export default function AuthLayout({
   children,
@@ -7,66 +8,35 @@ export default function AuthLayout({
 }) {
   return (
     <div className="flex min-h-screen">
-      {/* Left panel — brand */}
+      {/* Left panel — rotating promo copy */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-signara-navy p-12">
-        <div className="flex items-center gap-3">
-          <Image
-            src="/assets/logo-signara.png"
-            alt="Signara"
-            width={160}
-            height={48}
-            priority
-            className="h-12 w-auto"
-          />
-        </div>
+        <AuthPromoRotator className="flex flex-1 flex-col justify-center" />
 
-        <div className="space-y-6">
-          <blockquote className="space-y-4">
-            <p className="text-3xl font-bold leading-tight text-white">
-              Document workflows for modern organisations
-            </p>
-            <p className="text-signara-steel text-lg">
-              Replace paper-based approval processes with secure, auditable
-              digital workflows. Built for Zimbabwe and the SADC region.
-            </p>
-          </blockquote>
-
-          <div className="flex gap-8 pt-4">
-            <div>
-              <p className="text-signara-gold text-2xl font-bold">100%</p>
-              <p className="text-white/70 text-sm">Digital</p>
-            </div>
-            <div>
-              <p className="text-signara-gold text-2xl font-bold">Multi</p>
-              <p className="text-white/70 text-sm">Signatory</p>
-            </div>
-            <div>
-              <p className="text-signara-gold text-2xl font-bold">SADC</p>
-              <p className="text-white/70 text-sm">Ready</p>
-            </div>
-          </div>
-        </div>
-
-        <p className="text-white/40 text-sm">
+        <p className="text-sm text-white/40">
           &copy; {new Date().getFullYear()} Signara. All rights reserved.
         </p>
       </div>
 
-      {/* Right panel — form */}
-      <div className="flex w-full lg:w-1/2 flex-col items-center justify-center bg-white p-8">
-        <div className="w-full max-w-md">
-          {/* Mobile logo */}
-          <div className="mb-8 flex justify-center lg:hidden">
-            <Image
-              src="/assets/logo-signara.png"
-              alt="Signara"
-              width={140}
-              height={42}
-              priority
-              className="h-10 w-auto"
-            />
+      {/* Right panel — logo + form */}
+      <div className="flex w-full lg:w-1/2 flex-col bg-white p-8">
+        <div className="mb-8 flex justify-center">
+          <Image
+            src="/assets/logo-signara.png"
+            alt="Signara"
+            width={369}
+            height={160}
+            priority
+            className="h-20 w-auto max-w-[85%] object-contain lg:h-24"
+          />
+        </div>
+
+        <div className="flex flex-1 flex-col items-center justify-center">
+          <div className="w-full max-w-md">
+            <p className="mb-8 text-center text-sm leading-relaxed text-signara-steel lg:hidden">
+              Secure digital document workflows for modern organisations.
+            </p>
+            {children}
           </div>
-          {children}
         </div>
       </div>
     </div>
