@@ -1,10 +1,9 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
+import { BackLink } from '@/components/layout/back-link'
 import { OrgInfoForm } from '@/components/settings/org-info-form'
-import { ChevronLeft } from 'lucide-react'
 import type { User, Organisation, Plan } from '@/types/database'
 
 export default async function OrganisationSettingsPage() {
@@ -62,13 +61,7 @@ export default async function OrganisationSettingsPage() {
       <DashboardPageBody>
       <div className="max-w-xl space-y-8">
         {/* Back link */}
-        <Link
-          href="/dashboard/settings"
-          className="flex items-center gap-1.5 text-sm text-signara-steel hover:text-signara-navy transition-colors"
-        >
-          <ChevronLeft className="size-4" />
-          Back to Settings
-        </Link>
+        <BackLink href="/dashboard/settings" label="Back to Settings" />
 
         {/* Org settings card */}
         <div className="rounded-lg border border-signara-steel/30 bg-white shadow-sm">

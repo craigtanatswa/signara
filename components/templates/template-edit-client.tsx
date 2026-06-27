@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { BackLink } from '@/components/layout/back-link'
 import { TemplateEditor } from './template-editor'
 import { TemplateUnsavedDialog } from './template-unsaved-dialog'
 import { createTemplate, updateTemplate } from '@/app/actions/templates'
@@ -72,9 +73,17 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
     [name, description, isActive, content]
   )
   const isDirty = currentSnapshot !== baselineSnapshot
+  const hasTitle = name.trim().length > 0
 
   const persistTemplate = useCallback(
     async (options: { asDraft: boolean; validateFields: boolean }) => {
+      const trimmedName = name.trim()
+
+      if (!trimmedName) {
+        toast.error('Enter a template title before saving.')
+        return false
+      }
+
       const normalizedContent = normalizeTemplateContent(content)
 
       if (options.validateFields) {
@@ -86,7 +95,7 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
       }
 
       const payload = {
-        name: name.trim() || 'Untitled template',
+        name: trimmedName,
         description: description.trim() || null,
         content: normalizedContent,
         is_active: options.asDraft ? false : isActive,
@@ -174,10 +183,13 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex shrink-0 items-start justify-between gap-4 border-b border-signara-steel/20 bg-white px-6 py-4">
         <div className="min-w-0 flex-1 space-y-2">
+          <BackLink href="/dashboard/templates" label="Back to templates" />
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Template name"
+            required
+            aria-required="true"
             className="h-[2.75rem] min-h-[2.75rem] border-0 bg-transparent px-3 py-2 text-xl font-bold leading-snug text-signara-navy shadow-none placeholder:font-normal placeholder:text-signara-steel focus-visible:ring-0"
           />
           <Textarea
@@ -212,8 +224,8 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
 
           <Button
             onClick={handleSave}
-            disabled={isPending}
-            className="bg-signara-gold text-signara-navy font-semibold hover:bg-[#C49B2E]"
+            disabled={isPending || !hasTitle}
+            className="bg-signara-gold text-signara-navy font-semibold hover:bg-[#C49B2E] disabled:opacity-50"
           >
             {isPending ? (
               <>

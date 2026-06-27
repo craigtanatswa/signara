@@ -25,6 +25,13 @@ async function getAuthenticatedAdmin() {
   return { supabase, profile }
 }
 
+function validateTemplateName(name: string): string | null {
+  if (!name.trim()) {
+    return 'Template title is required.'
+  }
+  return null
+}
+
 // ─── Create ──────────────────────────────────────────────────────────────────
 
 export async function createTemplate(data: {
@@ -34,13 +41,18 @@ export async function createTemplate(data: {
   is_active: boolean
 }) {
   const { supabase, profile } = await getAuthenticatedAdmin()
+  const nameError = validateTemplateName(data.name)
+  if (nameError) {
+    return { error: nameError }
+  }
+
   const normalizedContent = normalizeTemplateContent(data.content)
 
   const { data: template, error } = await supabase
     .from('templates')
     .insert({
       organisation_id: profile.organisation_id,
-      name: data.name.trim() || 'Untitled template',
+      name: data.name.trim(),
       description: data.description,
       content: normalizedContent,
       workflow: [],
@@ -71,6 +83,10 @@ export async function updateTemplate(
   }
 ) {
   const { supabase, profile } = await getAuthenticatedAdmin()
+  const nameError = validateTemplateName(data.name)
+  if (nameError) {
+    return { error: nameError }
+  }
 
   // Fetch current version to increment it
   const { data: existing } = await supabase
@@ -89,7 +105,7 @@ export async function updateTemplate(
   const { error } = await supabase
     .from('templates')
     .update({
-      name: data.name.trim() || 'Untitled template',
+      name: data.name.trim(),
       description: data.description,
       content: normalizedContent,
       is_active: data.is_active,

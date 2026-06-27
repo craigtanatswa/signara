@@ -1,11 +1,10 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
+import { BackLink } from '@/components/layout/back-link'
 import { ProfileInfoForm } from '@/components/settings/profile-info-form'
 import { ChangePasswordForm } from '@/components/settings/change-password-form'
-import { ChevronLeft } from 'lucide-react'
 import type { User, Organisation } from '@/types/database'
 
 export default async function ProfilePage() {
@@ -56,13 +55,7 @@ export default async function ProfilePage() {
       <DashboardPageBody>
       <div className="max-w-xl space-y-8">
         {/* Back link */}
-        <Link
-          href="/dashboard/settings"
-          className="flex items-center gap-1.5 text-sm text-signara-steel hover:text-signara-navy transition-colors"
-        >
-          <ChevronLeft className="size-4" />
-          Back to Settings
-        </Link>
+        <BackLink href="/dashboard/settings" label="Back to Settings" />
 
         {/* Section A: Profile information */}
         <div className="rounded-lg border border-signara-steel/30 bg-white shadow-sm">
