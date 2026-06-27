@@ -10,6 +10,7 @@ import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { FormFieldExtension } from '@/lib/tiptap/field-extension'
+import { PageFlow } from '@/lib/tiptap/page-flow-plugin'
 import { DEFAULT_TEMPLATE_TEXT_COLOR, normalizeTemplateContent } from '@/lib/tiptap/field-utils'
 import {
   A4_PAGE_GAP_PX,
@@ -17,18 +18,24 @@ import {
   A4_PAGE_PADDING_X_PX,
   A4_PAGE_PADDING_Y_PX,
   A4_PAGE_WIDTH_PX,
+  ORG_LOGO_BLOCK_HEIGHT_PX,
 } from '@/lib/tiptap/a4-layout'
 import { TemplateToolbar } from './template-toolbar'
 import {
   TemplatePageCountBadge,
   TemplatePageGuide,
 } from './template-page-guide'
-import type { TiptapDocument } from '@/types/database'
+import {
+  TemplatePageBackgrounds,
+  TemplatePageLogos,
+} from './template-document-branding'
+import type { OrganisationBranding, TiptapDocument } from '@/types/database'
 import { useEffect, useRef, useState } from 'react'
 
 interface TemplateEditorProps {
   initialContent: TiptapDocument | null
   defaultTextColor?: string
+  organisationBranding?: OrganisationBranding | null
   onChange?: (content: TiptapDocument) => void
   editable?: boolean
 }
@@ -36,41 +43,50 @@ interface TemplateEditorProps {
 export function TemplateEditor({
   initialContent,
   defaultTextColor = DEFAULT_TEMPLATE_TEXT_COLOR,
+  organisationBranding,
   onChange,
   editable = true,
 }: TemplateEditorProps) {
+  const logoUrl = organisationBranding?.logoUrl ?? null
+  const letterheadUrl = organisationBranding?.letterheadUrl ?? null
+  const hasLetterhead = Boolean(letterheadUrl)
+  const hasLogo = Boolean(logoUrl)
   const canvasRef = useRef<HTMLDivElement>(null)
   const [contentHeightPx, setContentHeightPx] = useState(A4_PAGE_HEIGHT_PX)
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-      }),
-      TextStyle,
-      Color.configure({ types: ['textStyle'] }),
-      Placeholder.configure({
-        placeholder: 'Start typing your document, or insert a field from the toolbar above…',
-      }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      FormFieldExtension,
-    ],
-    content: normalizeTemplateContent(initialContent) ?? undefined,
-    editable,
-    editorProps: {
-      attributes: {
-        class: 'tiptap prose prose-signara max-w-none focus:outline-none',
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit.configure({
+          heading: { levels: [1, 2, 3] },
+        }),
+        TextStyle,
+        Color.configure({ types: ['textStyle'] }),
+        Placeholder.configure({
+          placeholder: 'Start typing your document, or insert a field from the toolbar above…',
+        }),
+        Table.configure({ resizable: true }),
+        TableRow,
+        TableHeader,
+        TableCell,
+        FormFieldExtension,
+        PageFlow.configure({ hasLogo }),
+      ],
+      content: normalizeTemplateContent(initialContent) ?? undefined,
+      editable,
+      editorProps: {
+        attributes: {
+          class: 'tiptap prose prose-signara max-w-none focus:outline-none',
+        },
       },
+      onUpdate({ editor }) {
+        const normalized = normalizeTemplateContent(editor.getJSON() as TiptapDocument)
+        if (normalized) onChange?.(normalized)
+      },
+      immediatelyRender: false,
     },
-    onUpdate({ editor }) {
-      const normalized = normalizeTemplateContent(editor.getJSON() as TiptapDocument)
-      if (normalized) onChange?.(normalized)
-    },
-    immediatelyRender: false,
-  })
+    [hasLogo]
+  )
 
   useEffect(() => {
     if (!editor) return
@@ -83,19 +99,32 @@ export function TemplateEditor({
     if (!editor || !canvasRef.current) return
 
     const measure = () => {
+      const pageContent = canvasRef.current?.querySelector('.template-page-content')
       const proseMirror = canvasRef.current?.querySelector('.tiptap')
-      if (proseMirror instanceof HTMLElement) {
-        setContentHeightPx(Math.max(proseMirror.scrollHeight, A4_PAGE_HEIGHT_PX))
-      }
+      const measured =
+        pageContent instanceof HTMLElement
+          ? pageContent.scrollHeight
+          : proseMirror instanceof HTMLElement
+            ? proseMirror.scrollHeight
+            : A4_PAGE_HEIGHT_PX
+      setContentHeightPx(Math.max(measured, A4_PAGE_HEIGHT_PX))
     }
 
     measure()
 
+    const pageContent = canvasRef.current.querySelector('.template-page-content')
     const proseMirror = canvasRef.current.querySelector('.tiptap')
-    if (!(proseMirror instanceof HTMLElement)) return
+    const observeTarget =
+      pageContent instanceof HTMLElement
+        ? pageContent
+        : proseMirror instanceof HTMLElement
+          ? proseMirror
+          : null
+
+    if (!observeTarget) return
 
     const resizeObserver = new ResizeObserver(measure)
-    resizeObserver.observe(proseMirror)
+    resizeObserver.observe(observeTarget)
 
     editor.on('update', measure)
 
@@ -120,28 +149,57 @@ export function TemplateEditor({
           className="relative mx-auto shadow-md"
           style={{ width: A4_PAGE_WIDTH_PX }}
         >
+          <TemplatePageBackgrounds
+            letterheadUrl={letterheadUrl}
+            contentHeightPx={contentHeightPx}
+          />
+          <TemplatePageLogos logoUrl={logoUrl} contentHeightPx={contentHeightPx} />
           <TemplatePageGuide contentHeightPx={contentHeightPx} />
-          <EditorContent editor={editor} />
+          <div
+            className={`template-page-content relative z-[1] ${hasLetterhead ? 'bg-transparent' : ''}`}
+          >
+            <EditorContent editor={editor} />
+          </div>
         </div>
         <TemplatePageCountBadge contentHeightPx={contentHeightPx} />
       </div>
 
       <style>{`
-        .tiptap {
-          position: relative;
-          z-index: 1;
-          min-height: ${A4_PAGE_HEIGHT_PX}px;
-          padding: ${A4_PAGE_PADDING_Y_PX}px ${A4_PAGE_PADDING_X_PX}px;
-          color: ${defaultTextColor};
-          background-color: #ffffff;
-          background-image: repeating-linear-gradient(
+        .template-page-content {
+          background-color: ${hasLetterhead ? 'transparent' : '#ffffff'};
+          background-image: ${
+            hasLetterhead
+              ? 'none'
+              : `repeating-linear-gradient(
             to bottom,
             #ffffff 0px,
             #ffffff ${A4_PAGE_HEIGHT_PX}px,
             #dde1e6 ${A4_PAGE_HEIGHT_PX}px,
             #dde1e6 ${A4_PAGE_HEIGHT_PX + A4_PAGE_GAP_PX}px
-          );
+          )`
+          };
           background-size: 100% ${A4_PAGE_HEIGHT_PX + A4_PAGE_GAP_PX}px;
+        }
+
+        .tiptap {
+          position: relative;
+          z-index: 1;
+          min-height: ${A4_PAGE_HEIGHT_PX}px;
+          padding: ${hasLogo ? ORG_LOGO_BLOCK_HEIGHT_PX : A4_PAGE_PADDING_Y_PX}px ${A4_PAGE_PADDING_X_PX}px ${A4_PAGE_PADDING_Y_PX}px;
+          color: ${defaultTextColor};
+          background-color: transparent;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .template-page-flow-spacer {
+          display: block;
+          width: 100%;
+          margin: 0;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          flex-shrink: 0;
         }
 
         .tiptap p.is-editor-empty:first-child::before {

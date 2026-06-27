@@ -1,15 +1,16 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   Document,
+  Image,
   Page,
   Text,
   View,
   StyleSheet,
   PDFViewer,
 } from '@react-pdf/renderer'
-import type { TiptapDocument, TiptapMark, TiptapNode } from '@/types/database'
+import type { OrganisationBranding, TiptapDocument, TiptapMark, TiptapNode } from '@/types/database'
 import {
   DEFAULT_TEMPLATE_TEXT_COLOR,
   FIELD_TYPE_LABELS,
@@ -17,17 +18,49 @@ import {
   getTemplateTextColor,
   normalizeFormFieldAttrs,
 } from '@/lib/tiptap/field-utils'
+import { resolveOrganisationBrandingForPdf } from '@/lib/pdf/resolve-pdf-image'
+import { ORG_LOGO_BLOCK_HEIGHT_PX } from '@/lib/tiptap/a4-layout'
 
-function createStyles(textColor: string) {
+const ORG_LOGO_BLOCK_PT = Math.round(ORG_LOGO_BLOCK_HEIGHT_PX * 0.75)
+
+function createStyles(textColor: string, hasLogo: boolean) {
   return StyleSheet.create({
     page: {
       fontFamily: 'Helvetica',
       fontSize: 11,
-      paddingTop: 48,
+      paddingTop: hasLogo ? ORG_LOGO_BLOCK_PT : 48,
       paddingBottom: 48,
       paddingHorizontal: 56,
       color: textColor,
       lineHeight: 1.6,
+      position: 'relative',
+    },
+    letterheadBackground: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+    },
+    logoBand: {
+      position: 'absolute',
+      top: 12,
+      left: 56,
+      right: 56,
+      height: 60,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    logoImage: {
+      width: 200,
+      height: 60,
+      objectFit: 'contain',
+    },
+    documentBody: {
+      width: '100%',
+    },
+    contentLayer: {
+      position: 'relative',
     },
     h1: {
       fontSize: 20,
@@ -220,7 +253,7 @@ function renderBlockContent(
       )
     }
 
-    return renderNode(node, `${keyPrefix}-block-${index}`, defaultColor, createStyles(defaultColor))
+    return renderNode(node, `${keyPrefix}-block-${index}`, defaultColor, createStyles(defaultColor, false))
   })
 }
 
@@ -349,19 +382,37 @@ function TemplatePdfDocument({
   content,
   name,
   textColor,
+  organisationBranding,
 }: {
   content: TiptapDocument
   name: string
   textColor: string
+  organisationBranding?: OrganisationBranding | null
 }) {
-  const styles = createStyles(textColor)
+  const logoUrl = organisationBranding?.logoUrl ?? null
+  const letterheadUrl = organisationBranding?.letterheadUrl ?? null
+  const styles = createStyles(textColor, Boolean(logoUrl))
 
   return (
     <Document title={name}>
       <Page size="A4" style={styles.page}>
-        {(content.content ?? []).map((node, index) =>
-          renderNode(node, String(index), textColor, styles)
-        )}
+        {letterheadUrl ? (
+          <Image fixed src={letterheadUrl} style={styles.letterheadBackground} />
+        ) : null}
+
+        {logoUrl ? (
+          <View fixed style={styles.logoBand}>
+            <Image src={logoUrl} style={styles.logoImage} />
+          </View>
+        ) : null}
+
+        <View style={styles.contentLayer}>
+          <View style={styles.documentBody}>
+            {(content.content ?? []).map((node, index) =>
+              renderNode(node, String(index), textColor, styles)
+            )}
+          </View>
+        </View>
       </Page>
     </Document>
   )
@@ -371,18 +422,54 @@ interface TemplatePdfPreviewProps {
   content: TiptapDocument
   name: string
   textColor?: string
+  organisationBranding?: OrganisationBranding | null
 }
 
 export function TemplatePdfPreview({
   content,
   name,
   textColor,
+  organisationBranding,
 }: TemplatePdfPreviewProps) {
   const resolvedColor = textColor ?? getTemplateTextColor(content) ?? DEFAULT_TEMPLATE_TEXT_COLOR
+  const [resolvedBranding, setResolvedBranding] = useState<OrganisationBranding | null>(null)
+  const [isPreparing, setIsPreparing] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function prepare() {
+      setIsPreparing(true)
+      const branding = await resolveOrganisationBrandingForPdf(organisationBranding)
+      if (!cancelled) {
+        setResolvedBranding(branding)
+        setIsPreparing(false)
+      }
+    }
+
+    prepare()
+
+    return () => {
+      cancelled = true
+    }
+  }, [organisationBranding])
+
+  if (isPreparing) {
+    return (
+      <div className="flex h-full items-center justify-center text-signara-steel">
+        Preparing PDF preview…
+      </div>
+    )
+  }
 
   return (
     <PDFViewer width="100%" height="100%" showToolbar>
-      <TemplatePdfDocument content={content} name={name} textColor={resolvedColor} />
+      <TemplatePdfDocument
+        content={content}
+        name={name}
+        textColor={resolvedColor}
+        organisationBranding={resolvedBranding}
+      />
     </PDFViewer>
   )
 }

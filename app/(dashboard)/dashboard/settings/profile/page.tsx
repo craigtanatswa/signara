@@ -42,6 +42,7 @@ export default async function ProfilePage() {
     id: userProfile.organisation_id,
     name: 'My Organisation',
     logo_url: null,
+    letterhead_url: null,
     plan_id: null,
     trial_ends_at: null,
     created_at: '',

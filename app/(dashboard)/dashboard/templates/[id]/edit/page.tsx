@@ -2,6 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { TemplateEditClient } from '@/components/templates/template-edit-client'
+import { getOrganisationBrandingForOrg } from '@/app/actions/organisation-branding'
 import type { User, Template } from '@/types/database'
 
 interface EditTemplatePageProps {
@@ -39,11 +40,17 @@ export default async function EditTemplatePage({ params }: EditTemplatePageProps
   if (templateError || !templateData) notFound()
 
   const template = templateData as Template
+  const organisationBranding = await getOrganisationBrandingForOrg(user.organisation_id)
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <Header pageTitle="Edit template" user={user} />
-      <TemplateEditClient mode="edit" template={template} />
+      <TemplateEditClient
+        mode="edit"
+        template={template}
+        organisationId={user.organisation_id}
+        organisationBranding={organisationBranding}
+      />
     </div>
   )
 }

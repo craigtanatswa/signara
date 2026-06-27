@@ -1,7 +1,6 @@
 'use client'
 
 import {
-  A4_PAGE_CYCLE_PX,
   A4_PAGE_GAP_PX,
   A4_PAGE_HEIGHT_PX,
   getA4PageCount,
@@ -25,7 +24,7 @@ export function TemplatePageGuide({ contentHeightPx }: TemplatePageGuideProps) {
   if (pageCount <= 1) return null
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-0" aria-hidden>
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-[3]" aria-hidden>
       {Array.from({ length: pageCount - 1 }, (_, index) => {
         const afterPage = index + 1
         const top = getPageBreakTopPx(afterPage)
@@ -58,4 +57,4 @@ export function TemplatePageCountBadge({ contentHeightPx }: TemplatePageGuidePro
   )
 }
 
-export { A4_PAGE_CYCLE_PX }
+export { A4_PAGE_CYCLE_PX } from '@/lib/tiptap/a4-layout'

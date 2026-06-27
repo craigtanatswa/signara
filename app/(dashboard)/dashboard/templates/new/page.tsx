@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { TemplateEditClient } from '@/components/templates/template-edit-client'
+import { getOrganisationBrandingForOrg } from '@/app/actions/organisation-branding'
 import type { User } from '@/types/database'
 
 export default async function NewTemplatePage() {
@@ -21,11 +22,12 @@ export default async function NewTemplatePage() {
   if (profile.role !== 'admin') redirect('/dashboard')
 
   const user = profile as User
+  const organisationBranding = await getOrganisationBrandingForOrg(user.organisation_id)
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <Header pageTitle="New template" user={user} />
-      <TemplateEditClient mode="new" />
+      <TemplateEditClient mode="new" organisationId={user.organisation_id} organisationBranding={organisationBranding} />
     </div>
   )
 }

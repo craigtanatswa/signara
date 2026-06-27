@@ -4,7 +4,14 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, Upload } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { OrgBrandingUpload } from '@/components/settings/org-branding-upload'
+import {
+  removeOrganisationLetterhead,
+  removeOrganisationLogo,
+  uploadOrganisationLetterhead,
+  uploadOrganisationLogo,
+} from '@/app/actions/organisation-branding'
 import { updateOrganisation } from '@/app/actions/profile'
 import { SuccessModal } from '@/components/ui/success-modal'
 import { Button } from '@/components/ui/button'
@@ -102,16 +109,29 @@ export function OrgInfoForm({ organisation, plan }: OrgInfoFormProps) {
         </Button>
       </form>
 
-      {/* Logo upload placeholder */}
-      <div className="space-y-1.5">
-        <Label className="text-signara-navy font-medium">Organisation logo</Label>
-        <div className="flex h-32 cursor-not-allowed items-center justify-center rounded-lg border-2 border-dashed border-signara-steel/40 bg-signara-background/50">
-          <div className="flex flex-col items-center gap-2 text-center">
-            <Upload className="size-6 text-signara-steel/50" />
-            <p className="text-sm text-signara-steel">Logo upload coming soon</p>
-          </div>
-        </div>
-      </div>
+      <OrgBrandingUpload
+        label="Organisation logo"
+        description="Optional. Shown centred at the top of templates and documents, above the main content."
+        currentUrl={organisation.logo_url}
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        emptyHint="No logo uploaded — templates will omit the header logo."
+        previewAlt="Organisation logo"
+        previewClassName="max-h-24 max-w-full object-contain"
+        onUpload={uploadOrganisationLogo}
+        onRemove={removeOrganisationLogo}
+      />
+
+      <OrgBrandingUpload
+        label="Letterhead background"
+        description="Optional. Full-page background image behind template content on every page (PNG recommended)."
+        currentUrl={organisation.letterhead_url}
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        emptyHint="No letterhead uploaded — templates use a plain white page background."
+        previewAlt="Letterhead background preview"
+        previewClassName="max-h-40 max-w-full object-contain"
+        onUpload={uploadOrganisationLetterhead}
+        onRemove={removeOrganisationLetterhead}
+      />
 
       {/* Plan info */}
       <div className="rounded-lg border border-signara-steel/30 p-4">

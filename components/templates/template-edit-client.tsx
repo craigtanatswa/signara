@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
@@ -15,17 +15,20 @@ import { BackLink } from '@/components/layout/back-link'
 import { TemplateEditor } from './template-editor'
 import { TemplateUnsavedDialog } from './template-unsaved-dialog'
 import { createTemplate, updateTemplate } from '@/app/actions/templates'
+import { getOrganisationBrandingForOrg } from '@/app/actions/organisation-branding'
 import { useTemplateUnsavedGuard } from '@/hooks/use-template-unsaved-guard'
 import {
   normalizeTemplateContent,
   validateTemplateFields,
   getTemplateTextColor,
 } from '@/lib/tiptap/field-utils'
-import type { Template, TiptapDocument } from '@/types/database'
+import type { OrganisationBranding, Template, TiptapDocument } from '@/types/database'
 
 interface TemplateEditClientProps {
   template?: Template | null
   mode: 'new' | 'edit'
+  organisationId: string
+  organisationBranding?: OrganisationBranding | null
 }
 
 interface TemplateSnapshotInput {
@@ -49,7 +52,12 @@ function buildSnapshot({
   })
 }
 
-export function TemplateEditClient({ template, mode }: TemplateEditClientProps) {
+export function TemplateEditClient({
+  template,
+  mode,
+  organisationId,
+  organisationBranding,
+}: TemplateEditClientProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -233,7 +241,7 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
             <Switch id="template-active" checked={isActive} onCheckedChange={setIsActive} />
           </div>
 
-          {templateId && content && (
+          {content && (
             <Button
               type="button"
               variant="outline"
@@ -282,6 +290,7 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
           <TemplateEditor
             initialContent={template?.content ?? null}
             defaultTextColor={getTemplateTextColor(template?.content ?? null)}
+            organisationBranding={organisationBranding}
             onChange={handleContentChange}
           />
         </div>
@@ -295,10 +304,12 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
         onCancel={handleCancelLeave}
       />
 
-      {showPdfPreview && templateId && content && (
+      {showPdfPreview && content && (
         <PdfPreviewModal
           content={content}
           name={name || 'Template preview'}
+          organisationId={organisationId}
+          organisationBranding={organisationBranding}
           onClose={() => setShowPdfPreview(false)}
         />
       )}
@@ -319,12 +330,35 @@ const TemplatePdfPreview = dynamic(
 function PdfPreviewModal({
   content,
   name,
+  organisationId,
+  organisationBranding: initialBranding,
   onClose,
 }: {
   content: TiptapDocument
   name: string
+  organisationId: string
+  organisationBranding?: OrganisationBranding | null
   onClose: () => void
 }) {
+  const [organisationBranding, setOrganisationBranding] = useState(initialBranding ?? null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadBranding() {
+      const branding = await getOrganisationBrandingForOrg(organisationId)
+      if (!cancelled) {
+        setOrganisationBranding(branding)
+      }
+    }
+
+    loadBranding()
+
+    return () => {
+      cancelled = true
+    }
+  }, [organisationId])
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
@@ -341,7 +375,12 @@ function PdfPreviewModal({
           </Button>
         </div>
         <div className="flex-1">
-          <TemplatePdfPreview content={content} name={name} />
+          <TemplatePdfPreview
+            key={`${organisationBranding?.logoUrl ?? 'no-logo'}-${organisationBranding?.letterheadUrl ?? 'no-letterhead'}`}
+            content={content}
+            name={name}
+            organisationBranding={organisationBranding}
+          />
         </div>
       </div>
     </div>

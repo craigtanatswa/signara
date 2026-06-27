@@ -46,6 +46,7 @@ export default async function OrganisationSettingsPage() {
     id: orgData.id,
     name: orgData.name,
     logo_url: orgData.logo_url,
+    letterhead_url: orgData.letterhead_url ?? null,
     plan_id: orgData.plan_id,
     trial_ends_at: orgData.trial_ends_at,
     created_at: orgData.created_at,
