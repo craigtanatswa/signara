@@ -30,16 +30,65 @@ export interface User {
   updated_at: string
 }
 
+// ─── Tiptap document types ───────────────────────────────────────────────────
+
+export type FieldType =
+  | 'text'
+  | 'number'
+  | 'date'
+  | 'dropdown'
+  | 'checkbox'
+  | 'file'
+  | 'signature'
+
+export interface FormFieldAttrs {
+  fieldId: string
+  fieldType: FieldType
+  label: string
+  required: boolean
+  options: string[]
+  configured?: boolean
+}
+
+export interface TiptapMark {
+  type: string
+  attrs?: Record<string, unknown>
+}
+
+export interface TiptapNode {
+  type: string
+  attrs?: Record<string, unknown>
+  content?: TiptapNode[]
+  marks?: TiptapMark[]
+  text?: string
+}
+
+export interface TiptapDocument {
+  type: 'doc'
+  content: TiptapNode[]
+}
+
+// ─── Template ────────────────────────────────────────────────────────────────
+
 export interface Template {
   id: string
   organisation_id: string
   name: string
   description: string | null
-  fields: Record<string, unknown> | null
-  steps: Record<string, unknown>[] | null
+  content: TiptapDocument | null
+  workflow: WorkflowStep[]
   created_by: string
+  version: number
+  is_active: boolean
   created_at: string
   updated_at: string
+}
+
+export interface WorkflowStep {
+  id: string
+  label: string
+  assignee_user_id: string | null
+  order: number
 }
 
 export interface Document {
