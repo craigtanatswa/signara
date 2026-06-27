@@ -26,11 +26,19 @@ import { useEffect, useRef, useState } from 'react'
 
 interface TemplateEditorProps {
   initialContent: TiptapDocument | null
+  textColor: string
+  onTextColorChange: (color: string) => void
   onChange?: (content: TiptapDocument) => void
   editable?: boolean
 }
 
-export function TemplateEditor({ initialContent, onChange, editable = true }: TemplateEditorProps) {
+export function TemplateEditor({
+  initialContent,
+  textColor,
+  onTextColorChange,
+  onChange,
+  editable = true,
+}: TemplateEditorProps) {
   const canvasRef = useRef<HTMLDivElement>(null)
   const [contentHeightPx, setContentHeightPx] = useState(A4_PAGE_HEIGHT_PX)
 
@@ -99,7 +107,13 @@ export function TemplateEditor({ initialContent, onChange, editable = true }: Te
 
   return (
     <div className="flex flex-col">
-      {editable && <TemplateToolbar editor={editor} />}
+      {editable && (
+        <TemplateToolbar
+          editor={editor}
+          textColor={textColor}
+          onTextColorChange={onTextColorChange}
+        />
+      )}
 
       <div
         className="rounded-b-lg border border-t-0 border-signara-steel/30 bg-[#dde1e6] py-6"
@@ -122,7 +136,7 @@ export function TemplateEditor({ initialContent, onChange, editable = true }: Te
           z-index: 1;
           min-height: ${A4_PAGE_HEIGHT_PX}px;
           padding: ${A4_PAGE_PADDING_Y_PX}px ${A4_PAGE_PADDING_X_PX}px;
-          color: #0f2c59;
+          color: ${textColor};
           background-color: #ffffff;
           background-image: repeating-linear-gradient(
             to bottom,
@@ -178,7 +192,7 @@ export function TemplateEditor({ initialContent, onChange, editable = true }: Te
         .tiptap h1 {
           font-size: 1.75rem;
           font-weight: 700;
-          color: #0f2c59;
+          color: ${textColor};
           margin-top: 1.5rem;
           margin-bottom: 0.5rem;
           line-height: 1.2;
@@ -187,7 +201,7 @@ export function TemplateEditor({ initialContent, onChange, editable = true }: Te
         .tiptap h2 {
           font-size: 1.375rem;
           font-weight: 600;
-          color: #0f2c59;
+          color: ${textColor};
           margin-top: 1.25rem;
           margin-bottom: 0.375rem;
           line-height: 1.3;
@@ -196,14 +210,14 @@ export function TemplateEditor({ initialContent, onChange, editable = true }: Te
         .tiptap p {
           margin-bottom: 0.75rem;
           line-height: 1.7;
-          color: #0f2c59;
+          color: ${textColor};
         }
 
         .tiptap ul,
         .tiptap ol {
           padding-left: 1.5rem;
           margin-bottom: 0.75rem;
-          color: #0f2c59;
+          color: ${textColor};
         }
 
         .tiptap li {

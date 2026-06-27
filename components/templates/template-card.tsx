@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { formatDistanceToNow } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
 import { MoreHorizontal, Pencil, Copy, Archive, Trash2, CheckCircle2, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -32,6 +32,17 @@ import type { Template } from '@/types/database'
 
 interface TemplateCardProps {
   template: Template
+}
+
+function TemplateUpdatedAt({ updatedAt }: { updatedAt: string }) {
+  const staticLabel = format(new Date(updatedAt), 'dd MMM yyyy')
+  const [label, setLabel] = useState(staticLabel)
+
+  useEffect(() => {
+    setLabel(formatDistanceToNow(new Date(updatedAt), { addSuffix: true }))
+  }, [updatedAt])
+
+  return <span>{label}</span>
 }
 
 export function TemplateCard({ template }: TemplateCardProps) {
@@ -169,9 +180,7 @@ export function TemplateCard({ template }: TemplateCardProps) {
             <div className="flex items-center gap-2 text-xs text-signara-steel">
               <span>v{template.version}</span>
               <span>·</span>
-              <span>
-                {formatDistanceToNow(new Date(template.updated_at), { addSuffix: true })}
-              </span>
+              <TemplateUpdatedAt updatedAt={template.updated_at} />
             </div>
           </div>
         </div>

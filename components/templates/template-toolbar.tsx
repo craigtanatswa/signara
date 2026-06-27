@@ -33,6 +33,8 @@ import type { FieldType } from '@/types/database'
 
 interface TemplateToolbarProps {
   editor: Editor
+  textColor: string
+  onTextColorChange: (color: string) => void
 }
 
 interface ToolbarButtonProps {
@@ -72,7 +74,7 @@ const FIELD_TYPES: { type: FieldType; label: string; icon: React.ComponentType<{
   { type: 'signature', label: 'Signature', icon: PenLine },
 ]
 
-export function TemplateToolbar({ editor }: TemplateToolbarProps) {
+export function TemplateToolbar({ editor, textColor, onTextColorChange }: TemplateToolbarProps) {
   function insertTable() {
     editor
       .chain()
@@ -103,6 +105,21 @@ export function TemplateToolbar({ editor }: TemplateToolbarProps) {
       >
         <Italic className="size-3.5" />
       </ToolbarButton>
+
+      <Separator orientation="vertical" className="mx-1 h-5" />
+
+      <div className="flex items-center gap-1.5 px-1" title="Text colour">
+        <label htmlFor="template-text-color" className="sr-only">
+          Text colour
+        </label>
+        <input
+          id="template-text-color"
+          type="color"
+          value={textColor}
+          onChange={(e) => onTextColorChange(e.target.value)}
+          className="size-7 cursor-pointer rounded border border-signara-steel/40 bg-white p-0.5"
+        />
+      </div>
 
       <Separator orientation="vertical" className="mx-1 h-5" />
 

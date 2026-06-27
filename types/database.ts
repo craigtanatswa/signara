@@ -65,6 +65,9 @@ export interface TiptapNode {
 
 export interface TiptapDocument {
   type: 'doc'
+  attrs?: {
+    textColor?: string
+  }
   content: TiptapNode[]
 }
 

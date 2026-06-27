@@ -35,6 +35,31 @@ export function isFieldLabelValid(label: string): boolean {
   return label.trim().length > 0
 }
 
+export const DEFAULT_TEMPLATE_TEXT_COLOR = '#000000'
+
+export function getTemplateTextColor(content: TiptapDocument | null | undefined): string {
+  const color = content?.attrs?.textColor
+  if (typeof color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(color)) {
+    return color
+  }
+  return DEFAULT_TEMPLATE_TEXT_COLOR
+}
+
+export function withTemplateTextColor(
+  content: TiptapDocument | null,
+  textColor: string
+): TiptapDocument | null {
+  if (!content) return content
+
+  return {
+    ...content,
+    attrs: {
+      ...content.attrs,
+      textColor: getTemplateTextColor({ ...content, attrs: { textColor } }),
+    },
+  }
+}
+
 export function normalizeFormFieldAttrs(
   attrs: Record<string, unknown> | undefined
 ): FormFieldAttrs {
@@ -80,6 +105,10 @@ export function normalizeTemplateContent(
 
   return {
     ...content,
+    attrs: {
+      ...content.attrs,
+      textColor: getTemplateTextColor(content),
+    },
     content: (content.content ?? []).map(normalizeNode),
   }
 }

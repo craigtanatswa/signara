@@ -8,6 +8,8 @@ interface EditTemplatePageProps {
   params: Promise<{ id: string }>
 }
 
+export const dynamic = 'force-dynamic'
+
 export default async function EditTemplatePage({ params }: EditTemplatePageProps) {
   const { id } = await params
   const supabase = await createClient()
@@ -27,14 +29,14 @@ export default async function EditTemplatePage({ params }: EditTemplatePageProps
 
   const user = profile as User
 
-  const { data: templateData } = await supabase
+  const { data: templateData, error: templateError } = await supabase
     .from('templates')
     .select('*')
     .eq('id', id)
     .eq('organisation_id', user.organisation_id)
-    .single()
+    .maybeSingle()
 
-  if (!templateData) notFound()
+  if (templateError || !templateData) notFound()
 
   const template = templateData as Template
 

@@ -19,6 +19,8 @@ import { useTemplateUnsavedGuard } from '@/hooks/use-template-unsaved-guard'
 import {
   normalizeTemplateContent,
   validateTemplateFields,
+  getTemplateTextColor,
+  withTemplateTextColor,
 } from '@/lib/tiptap/field-utils'
 import type { Template, TiptapDocument } from '@/types/database'
 
@@ -67,6 +69,18 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
   )
 
   const [showPdfPreview, setShowPdfPreview] = useState(false)
+  const [textColor, setTextColor] = useState(() =>
+    getTemplateTextColor(template?.content ?? null)
+  )
+
+  function handleContentChange(doc: TiptapDocument) {
+    setContent(withTemplateTextColor(doc, textColor))
+  }
+
+  function handleTextColorChange(color: string) {
+    setTextColor(color)
+    setContent((prev) => (prev ? withTemplateTextColor(prev, color) : prev))
+  }
 
   const currentSnapshot = useMemo(
     () => buildSnapshot({ name, description, isActive, content }),
@@ -76,7 +90,11 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
   const hasTitle = name.trim().length > 0
 
   const persistTemplate = useCallback(
-    async (options: { asDraft: boolean; validateFields: boolean }) => {
+    async (options: {
+      asDraft: boolean
+      validateFields: boolean
+      redirectAfterCreate?: boolean
+    }) => {
       const trimmedName = name.trim()
 
       if (!trimmedName) {
@@ -101,7 +119,9 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
         is_active: options.asDraft ? false : isActive,
       }
 
-      if (mode === 'new') {
+      const templateId = savedId ?? template?.id
+
+      if (mode === 'new' && !templateId) {
         const result = await createTemplate(payload)
         if (result.error) {
           toast.error(`Failed to save: ${result.error}`)
@@ -118,14 +138,19 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
           })
         )
 
-        if (!options.asDraft) {
+        if (options.redirectAfterCreate !== false) {
           router.replace(`/dashboard/templates/${result.id}/edit`)
         }
 
         return true
       }
 
-      const result = await updateTemplate(template!.id, payload)
+      if (!templateId) {
+        toast.error('Template not found. Please try saving again.')
+        return false
+      }
+
+      const result = await updateTemplate(templateId, payload)
       if (result.error) {
         toast.error(`Failed to save: ${result.error}`)
         return false
@@ -146,11 +171,15 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
 
       return true
     },
-    [content, isActive, mode, name, description, router, template]
+    [content, isActive, mode, name, description, router, savedId, template]
   )
 
   const saveAsDraft = useCallback(async () => {
-    const saved = await persistTemplate({ asDraft: true, validateFields: false })
+    const saved = await persistTemplate({
+      asDraft: true,
+      validateFields: false,
+      redirectAfterCreate: false,
+    })
     if (saved) {
       toast.success('Template saved as draft')
     }
@@ -170,7 +199,11 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
 
   function handleSave() {
     startTransition(async () => {
-      const saved = await persistTemplate({ asDraft: false, validateFields: true })
+      const saved = await persistTemplate({
+        asDraft: false,
+        validateFields: true,
+        redirectAfterCreate: true,
+      })
       if (saved) {
         toast.success('Template saved')
       }
@@ -255,7 +288,12 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
 
       <div className="flex-1 overflow-y-auto bg-signara-background p-6">
         <div className="mx-auto max-w-[850px]">
-          <TemplateEditor initialContent={template?.content ?? null} onChange={setContent} />
+          <TemplateEditor
+            initialContent={template?.content ?? null}
+            textColor={textColor}
+            onTextColorChange={handleTextColorChange}
+            onChange={handleContentChange}
+          />
         </div>
       </div>
 
@@ -271,6 +309,7 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
         <PdfPreviewModal
           content={content}
           name={name || 'Template preview'}
+          textColor={textColor}
           onClose={() => setShowPdfPreview(false)}
         />
       )}
@@ -291,10 +330,12 @@ const TemplatePdfPreview = dynamic(
 function PdfPreviewModal({
   content,
   name,
+  textColor,
   onClose,
 }: {
   content: TiptapDocument
   name: string
+  textColor: string
   onClose: () => void
 }) {
   return (
@@ -313,7 +354,7 @@ function PdfPreviewModal({
           </Button>
         </div>
         <div className="flex-1">
-          <TemplatePdfPreview content={content} name={name} />
+          <TemplatePdfPreview content={content} name={name} textColor={textColor} />
         </div>
       </div>
     </div>
