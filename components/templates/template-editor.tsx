@@ -3,12 +3,14 @@
 import { useEditor, EditorContent } from '@tiptap/react'
 import { StarterKit } from '@tiptap/starter-kit'
 import { Placeholder } from '@tiptap/extension-placeholder'
+import { TextStyle } from '@tiptap/extension-text-style'
+import { Color } from '@tiptap/extension-color'
 import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { FormFieldExtension } from '@/lib/tiptap/field-extension'
-import { normalizeTemplateContent } from '@/lib/tiptap/field-utils'
+import { DEFAULT_TEMPLATE_TEXT_COLOR, normalizeTemplateContent } from '@/lib/tiptap/field-utils'
 import {
   A4_PAGE_GAP_PX,
   A4_PAGE_HEIGHT_PX,
@@ -26,16 +28,14 @@ import { useEffect, useRef, useState } from 'react'
 
 interface TemplateEditorProps {
   initialContent: TiptapDocument | null
-  textColor: string
-  onTextColorChange: (color: string) => void
+  defaultTextColor?: string
   onChange?: (content: TiptapDocument) => void
   editable?: boolean
 }
 
 export function TemplateEditor({
   initialContent,
-  textColor,
-  onTextColorChange,
+  defaultTextColor = DEFAULT_TEMPLATE_TEXT_COLOR,
   onChange,
   editable = true,
 }: TemplateEditorProps) {
@@ -47,6 +47,8 @@ export function TemplateEditor({
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
       }),
+      TextStyle,
+      Color.configure({ types: ['textStyle'] }),
       Placeholder.configure({
         placeholder: 'Start typing your document, or insert a field from the toolbar above…',
       }),
@@ -107,13 +109,7 @@ export function TemplateEditor({
 
   return (
     <div className="flex flex-col">
-      {editable && (
-        <TemplateToolbar
-          editor={editor}
-          textColor={textColor}
-          onTextColorChange={onTextColorChange}
-        />
-      )}
+      {editable && <TemplateToolbar editor={editor} defaultTextColor={defaultTextColor} />}
 
       <div
         className="rounded-b-lg border border-t-0 border-signara-steel/30 bg-[#dde1e6] py-6"
@@ -136,7 +132,7 @@ export function TemplateEditor({
           z-index: 1;
           min-height: ${A4_PAGE_HEIGHT_PX}px;
           padding: ${A4_PAGE_PADDING_Y_PX}px ${A4_PAGE_PADDING_X_PX}px;
-          color: ${textColor};
+          color: ${defaultTextColor};
           background-color: #ffffff;
           background-image: repeating-linear-gradient(
             to bottom,
@@ -192,7 +188,6 @@ export function TemplateEditor({
         .tiptap h1 {
           font-size: 1.75rem;
           font-weight: 700;
-          color: ${textColor};
           margin-top: 1.5rem;
           margin-bottom: 0.5rem;
           line-height: 1.2;
@@ -201,7 +196,6 @@ export function TemplateEditor({
         .tiptap h2 {
           font-size: 1.375rem;
           font-weight: 600;
-          color: ${textColor};
           margin-top: 1.25rem;
           margin-bottom: 0.375rem;
           line-height: 1.3;
@@ -210,14 +204,12 @@ export function TemplateEditor({
         .tiptap p {
           margin-bottom: 0.75rem;
           line-height: 1.7;
-          color: ${textColor};
         }
 
         .tiptap ul,
         .tiptap ol {
           padding-left: 1.5rem;
           margin-bottom: 0.75rem;
-          color: ${textColor};
         }
 
         .tiptap li {

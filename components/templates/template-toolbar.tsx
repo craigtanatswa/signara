@@ -1,6 +1,6 @@
 'use client'
 
-import type { Editor } from '@tiptap/react'
+import { useEditorState, type Editor } from '@tiptap/react'
 import {
   Bold,
   Italic,
@@ -29,12 +29,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
+import { DEFAULT_TEMPLATE_TEXT_COLOR } from '@/lib/tiptap/field-utils'
 import type { FieldType } from '@/types/database'
 
 interface TemplateToolbarProps {
   editor: Editor
-  textColor: string
-  onTextColorChange: (color: string) => void
+  defaultTextColor?: string
 }
 
 interface ToolbarButtonProps {
@@ -74,7 +74,21 @@ const FIELD_TYPES: { type: FieldType; label: string; icon: React.ComponentType<{
   { type: 'signature', label: 'Signature', icon: PenLine },
 ]
 
-export function TemplateToolbar({ editor, textColor, onTextColorChange }: TemplateToolbarProps) {
+export function TemplateToolbar({
+  editor,
+  defaultTextColor = DEFAULT_TEMPLATE_TEXT_COLOR,
+}: TemplateToolbarProps) {
+  const { selectionColor, hasSelection } = useEditorState({
+    editor,
+    selector: ({ editor: ed }) => {
+      const inlineColor = ed.getAttributes('textStyle').color as string | undefined
+      return {
+        selectionColor: inlineColor ?? defaultTextColor,
+        hasSelection: !ed.state.selection.empty,
+      }
+    },
+  })
+
   function insertTable() {
     editor
       .chain()
@@ -86,6 +100,11 @@ export function TemplateToolbar({ editor, textColor, onTextColorChange }: Templa
   function insertField(fieldType: FieldType) {
     window.dispatchEvent(new CustomEvent('tiptap:close-field-popovers'))
     editor.chain().focus().insertFormField({ fieldType }).run()
+  }
+
+  function handleTextColorChange(color: string) {
+    if (!hasSelection) return
+    editor.chain().focus().setColor(color).run()
   }
 
   return (
@@ -108,16 +127,20 @@ export function TemplateToolbar({ editor, textColor, onTextColorChange }: Templa
 
       <Separator orientation="vertical" className="mx-1 h-5" />
 
-      <div className="flex items-center gap-1.5 px-1" title="Text colour">
+      <div
+        className={cn('flex items-center gap-1.5 px-1', !hasSelection && 'opacity-50')}
+        title={hasSelection ? 'Text colour' : 'Select text to apply colour'}
+      >
         <label htmlFor="template-text-color" className="sr-only">
           Text colour
         </label>
         <input
           id="template-text-color"
           type="color"
-          value={textColor}
-          onChange={(e) => onTextColorChange(e.target.value)}
-          className="size-7 cursor-pointer rounded border border-signara-steel/40 bg-white p-0.5"
+          value={selectionColor}
+          disabled={!hasSelection}
+          onChange={(e) => handleTextColorChange(e.target.value)}
+          className="size-7 cursor-pointer rounded border border-signara-steel/40 bg-white p-0.5 disabled:cursor-not-allowed"
         />
       </div>
 

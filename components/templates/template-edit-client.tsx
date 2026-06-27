@@ -20,7 +20,6 @@ import {
   normalizeTemplateContent,
   validateTemplateFields,
   getTemplateTextColor,
-  withTemplateTextColor,
 } from '@/lib/tiptap/field-utils'
 import type { Template, TiptapDocument } from '@/types/database'
 
@@ -69,17 +68,9 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
   )
 
   const [showPdfPreview, setShowPdfPreview] = useState(false)
-  const [textColor, setTextColor] = useState(() =>
-    getTemplateTextColor(template?.content ?? null)
-  )
 
   function handleContentChange(doc: TiptapDocument) {
-    setContent(withTemplateTextColor(doc, textColor))
-  }
-
-  function handleTextColorChange(color: string) {
-    setTextColor(color)
-    setContent((prev) => (prev ? withTemplateTextColor(prev, color) : prev))
+    setContent(doc)
   }
 
   const currentSnapshot = useMemo(
@@ -290,8 +281,7 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
         <div className="mx-auto max-w-[850px]">
           <TemplateEditor
             initialContent={template?.content ?? null}
-            textColor={textColor}
-            onTextColorChange={handleTextColorChange}
+            defaultTextColor={getTemplateTextColor(template?.content ?? null)}
             onChange={handleContentChange}
           />
         </div>
@@ -309,7 +299,6 @@ export function TemplateEditClient({ template, mode }: TemplateEditClientProps) 
         <PdfPreviewModal
           content={content}
           name={name || 'Template preview'}
-          textColor={textColor}
           onClose={() => setShowPdfPreview(false)}
         />
       )}
@@ -330,12 +319,10 @@ const TemplatePdfPreview = dynamic(
 function PdfPreviewModal({
   content,
   name,
-  textColor,
   onClose,
 }: {
   content: TiptapDocument
   name: string
-  textColor: string
   onClose: () => void
 }) {
   return (
@@ -354,7 +341,7 @@ function PdfPreviewModal({
           </Button>
         </div>
         <div className="flex-1">
-          <TemplatePdfPreview content={content} name={name} textColor={textColor} />
+          <TemplatePdfPreview content={content} name={name} />
         </div>
       </div>
     </div>
