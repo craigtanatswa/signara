@@ -1,14 +1,23 @@
 'use client'
 
 import { useEditorState, type Editor } from '@tiptap/react'
+import { useRef } from 'react'
 import {
   Bold,
   Italic,
   Underline,
+  Strikethrough,
   Heading1,
   Heading2,
   List,
   ListOrdered,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  IndentDecrease,
+  IndentIncrease,
+  Highlighter,
   Minus,
   Plus,
   Table,
@@ -31,6 +40,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { DEFAULT_TEMPLATE_TEXT_COLOR } from '@/lib/tiptap/field-utils'
+import { formatFontSizeLabel, TEMPLATE_FONT_SIZES_PT } from '@/lib/tiptap/font-size'
 import type { FieldType } from '@/types/database'
 
 interface TemplateToolbarProps {
@@ -76,20 +86,66 @@ const FIELD_TYPES: { type: FieldType; label: string; icon: React.ComponentType<{
   { type: 'signature', label: 'Signature', icon: PenLine },
 ]
 
+const FONT_FAMILIES = [
+  { label: 'Default Font', value: '' },
+  { label: 'Arial', value: 'Arial, sans-serif' },
+  { label: 'Calibri', value: 'Calibri, Arial, sans-serif' },
+  { label: 'Times New Roman', value: '"Times New Roman", serif' },
+  { label: 'Georgia', value: 'Georgia, serif' },
+  { label: 'Courier New', value: '"Courier New", monospace' },
+]
+
+const FONT_SIZES = TEMPLATE_FONT_SIZES_PT
+
 export function TemplateToolbar({
   editor,
   defaultTextColor = DEFAULT_TEMPLATE_TEXT_COLOR,
 }: TemplateToolbarProps) {
-  const { selectionColor, hasSelection } = useEditorState({
+  const savedSelectionRef = useRef<{ from: number; to: number } | null>(null)
+  const {
+    selectionColor,
+    highlightColor,
+    fontFamily,
+    fontSize,
+    textAlign,
+  } = useEditorState({
     editor,
     selector: ({ editor: ed }) => {
-      const inlineColor = ed.getAttributes('textStyle').color as string | undefined
+      const textStyleAttrs = ed.getAttributes('textStyle')
+      const paragraphAttrs = ed.getAttributes('paragraph')
+      const headingAttrs = ed.getAttributes('heading')
+      const blockAttrs = Object.keys(paragraphAttrs).length ? paragraphAttrs : headingAttrs
+      const inlineColor = textStyleAttrs.color as string | undefined
+      const inlineHighlight = ed.getAttributes('highlight').color as string | undefined
       return {
         selectionColor: inlineColor ?? defaultTextColor,
-        hasSelection: !ed.state.selection.empty,
+        highlightColor: inlineHighlight ?? '#fff59d',
+        fontFamily: (textStyleAttrs.fontFamily as string | undefined) ?? '',
+        fontSize: (textStyleAttrs.fontSize as string | undefined) ?? '',
+        textAlign: (blockAttrs.textAlign as string | undefined) ?? 'left',
       }
     },
   })
+
+  function rememberSelection() {
+    const { from, to } = editor.state.selection
+    savedSelectionRef.current = { from, to }
+  }
+
+  function formattingChain() {
+    const chain = editor.chain().focus()
+    const savedSelection = savedSelectionRef.current
+
+    if (savedSelection) {
+      const maxPosition = editor.state.doc.content.size
+      chain.setTextSelection({
+        from: Math.min(savedSelection.from, maxPosition),
+        to: Math.min(savedSelection.to, maxPosition),
+      })
+    }
+
+    return chain
+  }
 
   function insertTable() {
     editor
@@ -105,8 +161,23 @@ export function TemplateToolbar({
   }
 
   function handleTextColorChange(color: string) {
-    if (!hasSelection) return
-    editor.chain().focus().setColor(color).run()
+    formattingChain().setColor(color).run()
+  }
+
+  function handleHighlightChange(color: string) {
+    formattingChain().setHighlight({ color }).run()
+  }
+
+  function handleFontFamilyChange(value: string) {
+    const chain = formattingChain()
+    if (value) chain.setFontFamily(value).run()
+    else chain.unsetFontFamily().run()
+  }
+
+  function handleFontSizeChange(value: string) {
+    const chain = formattingChain()
+    if (value) chain.setFontSize(value).run()
+    else chain.unsetFontSize().run()
   }
 
   return (
@@ -133,12 +204,62 @@ export function TemplateToolbar({
       >
         <Underline className="size-3.5" />
       </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleStrike().run()}
+        active={editor.isActive('strike')}
+        title="Strike-through"
+      >
+        <Strikethrough className="size-3.5" />
+      </ToolbarButton>
+
+      <Separator orientation="vertical" className="mx-1 h-5" />
+
+      <label htmlFor="template-font-family" className="sr-only">
+        Font family
+      </label>
+      <select
+        id="template-font-family"
+        value={fontFamily}
+        onMouseDown={rememberSelection}
+        onFocus={rememberSelection}
+        onChange={(e) => handleFontFamilyChange(e.target.value)}
+        className="h-8 rounded border border-signara-steel/40 bg-white px-2 text-xs text-signara-navy"
+        title="Font family"
+      >
+        {FONT_FAMILIES.map((font) => (
+          <option key={font.label} value={font.value}>
+            {font.label}
+          </option>
+        ))}
+      </select>
+
+      <label htmlFor="template-font-size" className="sr-only">
+        Font size
+      </label>
+      <select
+        id="template-font-size"
+        value={fontSize}
+        onMouseDown={rememberSelection}
+        onFocus={rememberSelection}
+        onChange={(e) => handleFontSizeChange(e.target.value)}
+        className="h-8 rounded border border-signara-steel/40 bg-white px-2 text-xs text-signara-navy"
+        title="Font size"
+      >
+        <option value="" disabled hidden>
+          Size
+        </option>
+        {FONT_SIZES.map((size) => (
+          <option key={size} value={size}>
+            {formatFontSizeLabel(size)}
+          </option>
+        ))}
+      </select>
 
       <Separator orientation="vertical" className="mx-1 h-5" />
 
       <div
-        className={cn('flex items-center gap-1.5 px-1', !hasSelection && 'opacity-50')}
-        title={hasSelection ? 'Text colour' : 'Select text to apply colour'}
+        className="flex items-center gap-1.5 px-1"
+        title="Text colour"
       >
         <label htmlFor="template-text-color" className="sr-only">
           Text colour
@@ -147,9 +268,25 @@ export function TemplateToolbar({
           id="template-text-color"
           type="color"
           value={selectionColor}
-          disabled={!hasSelection}
+          onMouseDown={rememberSelection}
+          onFocus={rememberSelection}
           onChange={(e) => handleTextColorChange(e.target.value)}
-          className="size-7 cursor-pointer rounded border border-signara-steel/40 bg-white p-0.5 disabled:cursor-not-allowed"
+          className="size-7 cursor-pointer rounded border border-signara-steel/40 bg-white p-0.5"
+        />
+      </div>
+      <div className="flex items-center gap-1.5 px-1" title="Highlight">
+        <Highlighter className="size-3.5 text-signara-steel" />
+        <label htmlFor="template-highlight-color" className="sr-only">
+          Highlight colour
+        </label>
+        <input
+          id="template-highlight-color"
+          type="color"
+          value={highlightColor}
+          onMouseDown={rememberSelection}
+          onFocus={rememberSelection}
+          onChange={(e) => handleHighlightChange(e.target.value)}
+          className="size-7 cursor-pointer rounded border border-signara-steel/40 bg-white p-0.5"
         />
       </div>
 
@@ -173,6 +310,38 @@ export function TemplateToolbar({
 
       <Separator orientation="vertical" className="mx-1 h-5" />
 
+      {/* Alignment */}
+      <ToolbarButton
+        onClick={() => editor.chain().focus().setTextAlign('left').run()}
+        active={textAlign === 'left'}
+        title="Align left"
+      >
+        <AlignLeft className="size-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().setTextAlign('center').run()}
+        active={textAlign === 'center'}
+        title="Align center"
+      >
+        <AlignCenter className="size-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().setTextAlign('right').run()}
+        active={textAlign === 'right'}
+        title="Align right"
+      >
+        <AlignRight className="size-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+        active={textAlign === 'justify'}
+        title="Justify"
+      >
+        <AlignJustify className="size-3.5" />
+      </ToolbarButton>
+
+      <Separator orientation="vertical" className="mx-1 h-5" />
+
       {/* Lists */}
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBulletList().run()}
@@ -187,6 +356,18 @@ export function TemplateToolbar({
         title="Numbered list"
       >
         <ListOrdered className="size-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().decreaseIndent().run()}
+        title="Decrease indent (Shift+Tab)"
+      >
+        <IndentDecrease className="size-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().increaseIndent().run()}
+        title="Increase indent (Tab)"
+      >
+        <IndentIncrease className="size-3.5" />
       </ToolbarButton>
 
       <Separator orientation="vertical" className="mx-1 h-5" />
@@ -213,7 +394,7 @@ export function TemplateToolbar({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 px-2.5 text-xs font-medium text-signara-navy hover:bg-signara-navy/10"
+            className="h-8 gap-1.5 rounded-md border border-signara-navy px-2.5 text-xs font-medium text-signara-navy hover:bg-signara-navy/10"
           >
             <Plus className="size-3.5" />
             Insert field

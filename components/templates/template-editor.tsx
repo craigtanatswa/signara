@@ -5,11 +5,15 @@ import { StarterKit } from '@tiptap/starter-kit'
 import { Placeholder } from '@tiptap/extension-placeholder'
 import { TextStyle } from '@tiptap/extension-text-style'
 import { Color } from '@tiptap/extension-color'
+import { FontFamily } from '@tiptap/extension-font-family'
+import { Highlight } from '@tiptap/extension-highlight'
+import { TextAlign } from '@tiptap/extension-text-align'
 import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { FormFieldExtension } from '@/lib/tiptap/field-extension'
+import { FontSize, ParagraphFormatting, TabIndent } from '@/lib/tiptap/formatting-extensions'
 import { PageFlow } from '@/lib/tiptap/page-flow-plugin'
 import { DEFAULT_TEMPLATE_TEXT_COLOR, normalizeTemplateContent } from '@/lib/tiptap/field-utils'
 import {
@@ -21,6 +25,7 @@ import {
   ORG_LOGO_BLOCK_HEIGHT_PX,
   getA4CanvasHeightPx,
 } from '@/lib/tiptap/a4-layout'
+import { DEFAULT_TEMPLATE_FONT_SIZE_PT } from '@/lib/tiptap/font-size'
 import { TemplateToolbar } from './template-toolbar'
 import {
   TemplatePageCountBadge,
@@ -69,6 +74,10 @@ export function TemplateEditor({
         }),
         TextStyle,
         Color.configure({ types: ['textStyle'] }),
+        FontFamily.configure({ types: ['textStyle'] }),
+        FontSize,
+        Highlight.configure({ multicolor: true }),
+        TextAlign.configure({ types: ['heading', 'paragraph'] }),
         Placeholder.configure({
           placeholder: 'Start typing your document, or insert a field from the toolbar above…',
         }),
@@ -77,6 +86,8 @@ export function TemplateEditor({
         TableHeader,
         TableCell,
         FormFieldExtension,
+        ParagraphFormatting,
+        TabIndent,
         PageFlow.configure({ hasLogo }),
       ],
       content: normalizeTemplateContent(initialContent) ?? undefined,
@@ -191,6 +202,7 @@ export function TemplateEditor({
           min-height: ${A4_PAGE_HEIGHT_PX}px;
           padding: ${hasLogo ? ORG_LOGO_BLOCK_HEIGHT_PX : A4_PAGE_PADDING_Y_PX}px ${A4_PAGE_PADDING_X_PX}px ${A4_PAGE_PADDING_Y_PX}px;
           color: ${defaultTextColor};
+          font-size: ${DEFAULT_TEMPLATE_FONT_SIZE_PT};
           background-color: transparent;
           display: flex;
           flex-direction: column;
@@ -248,7 +260,7 @@ export function TemplateEditor({
         }
 
         .tiptap h1 {
-          font-size: 1.75rem;
+          font-size: 20pt;
           font-weight: 700;
           margin-top: 1.5rem;
           margin-bottom: 0.5rem;
@@ -256,11 +268,19 @@ export function TemplateEditor({
         }
 
         .tiptap h2 {
-          font-size: 1.375rem;
+          font-size: 15pt;
           font-weight: 600;
           margin-top: 1.25rem;
           margin-bottom: 0.375rem;
           line-height: 1.3;
+        }
+
+        .tiptap h3 {
+          font-size: 13pt;
+          font-weight: 600;
+          margin-top: 1rem;
+          margin-bottom: 0.25rem;
+          line-height: 1.35;
         }
 
         .tiptap p {
@@ -272,6 +292,14 @@ export function TemplateEditor({
         .tiptap ol {
           padding-left: 1.5rem;
           margin-bottom: 0.75rem;
+        }
+
+        .tiptap ul {
+          list-style-type: disc;
+        }
+
+        .tiptap ol {
+          list-style-type: decimal;
         }
 
         .tiptap li {

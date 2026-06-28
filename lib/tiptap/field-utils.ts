@@ -1,4 +1,5 @@
-import type { FieldType, FormFieldAttrs, TiptapDocument, TiptapNode } from '@/types/database'
+import type { FieldType, FormFieldAttrs, TiptapDocument, TiptapMark, TiptapNode } from '@/types/database'
+import { normalizeFontSize } from '@/lib/tiptap/font-size'
 
 export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   text: 'Text',
@@ -161,12 +162,36 @@ function normalizeNodeList(nodes: TiptapNode[] | undefined): TiptapNode[] {
   return normalized
 }
 
+function normalizeMarks(marks: TiptapMark[] | undefined): TiptapMark[] | undefined {
+  if (!marks?.length) return marks
+
+  return marks.map((mark) => {
+    if (mark.type !== 'textStyle' || typeof mark.attrs?.fontSize !== 'string') {
+      return mark
+    }
+
+    const fontSize = normalizeFontSize(mark.attrs.fontSize)
+    if (!fontSize || fontSize === mark.attrs.fontSize) {
+      return mark
+    }
+
+    return { ...mark, attrs: { ...mark.attrs, fontSize } }
+  })
+}
+
 function normalizeNode(node: TiptapNode): TiptapNode {
   if (node.type === 'formField') {
     const attrs = normalizeFormFieldAttrs(node.attrs)
     return {
       ...node,
       attrs: { ...attrs },
+    }
+  }
+
+  if (node.type === 'text' && node.marks?.length) {
+    const marks = normalizeMarks(node.marks)
+    if (marks !== node.marks) {
+      return { ...node, marks }
     }
   }
 

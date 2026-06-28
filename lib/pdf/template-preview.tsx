@@ -20,6 +20,7 @@ import {
   getTemplateUsesOrganisationLetterhead,
   normalizeFormFieldAttrs,
 } from '@/lib/tiptap/field-utils'
+import { normalizeFontSize } from '@/lib/tiptap/font-size'
 import { resolveOrganisationBrandingForPdf } from '@/lib/pdf/resolve-pdf-image'
 import { ORG_LOGO_BLOCK_HEIGHT_PX } from '@/lib/tiptap/a4-layout'
 
@@ -183,7 +184,17 @@ function getMarkStyles(marks: TiptapMark[] | undefined, defaultColor: string) {
   const isStrike = markTypes.has('strike')
   const isUnderline = markTypes.has('underline')
 
-  let fontFamily = 'Helvetica'
+  const textStyleMark = marks?.find((mark) => mark.type === 'textStyle')
+  const fontFamilyAttr =
+    typeof textStyleMark?.attrs?.fontFamily === 'string'
+      ? textStyleMark.attrs.fontFamily
+      : undefined
+
+  let fontFamily = fontFamilyAttr?.includes('Courier')
+    ? 'Courier'
+    : fontFamilyAttr?.includes('Times')
+      ? 'Times-Roman'
+      : 'Helvetica'
   if (isBold && isItalic) fontFamily = 'Helvetica-BoldOblique'
   else if (isBold) fontFamily = 'Helvetica-Bold'
   else if (isItalic) fontFamily = 'Helvetica-Oblique'
@@ -192,15 +203,48 @@ function getMarkStyles(marks: TiptapMark[] | undefined, defaultColor: string) {
   if (isStrike) decorations.push('line-through')
   if (isUnderline) decorations.push('underline')
 
-  const textStyleMark = marks?.find((mark) => mark.type === 'textStyle')
   const inlineColor =
     typeof textStyleMark?.attrs?.color === 'string' ? textStyleMark.attrs.color : undefined
+  const fontSizeRaw =
+    typeof textStyleMark?.attrs?.fontSize === 'string'
+      ? normalizeFontSize(textStyleMark.attrs.fontSize)
+      : null
+  const fontSize = fontSizeRaw ? Number.parseFloat(fontSizeRaw) : undefined
+  const highlightMark = marks?.find((mark) => mark.type === 'highlight')
+  const backgroundColor =
+    typeof highlightMark?.attrs?.color === 'string' ? highlightMark.attrs.color : undefined
 
   return {
     fontFamily,
     color: inlineColor ?? defaultColor,
+    fontSize,
+    backgroundColor,
     textDecoration: decorations.length > 0 ? decorations.join(' ') : undefined,
   }
+}
+
+function getBlockStyle(node: TiptapNode, baseStyle: PdfTextStyle): PdfTextStyle {
+  const attrs = node.attrs ?? {}
+  const indent = typeof attrs.indent === 'number' ? attrs.indent : 0
+  const lineHeight =
+    typeof attrs.lineHeight === 'string' && attrs.lineHeight
+      ? Number.parseFloat(attrs.lineHeight)
+      : undefined
+  const marginBottom =
+    typeof attrs.paragraphSpacing === 'string' && attrs.paragraphSpacing
+      ? Number.parseFloat(attrs.paragraphSpacing)
+      : undefined
+  const textAlign =
+    typeof attrs.textAlign === 'string'
+      ? (attrs.textAlign as 'left' | 'center' | 'right' | 'justify')
+      : undefined
+
+  return mergePdfStyles(baseStyle, {
+    marginLeft: indent * 18,
+    lineHeight,
+    marginBottom,
+    textAlign,
+  })
 }
 
 function renderInlineContent(
@@ -245,12 +289,13 @@ function renderBlockContent(
 
   return nodes.map((node, index) => {
     if (node.type === 'paragraph') {
+      const paragraphStyle = getBlockStyle(node, { ...baseStyle, marginBottom: 4 })
       return (
         <Text
           key={`${keyPrefix}-p-${index}`}
-          style={{ ...baseStyle, marginBottom: 4 }}
+          style={paragraphStyle}
         >
-          {renderInlineContent(node.content, baseStyle, defaultColor, `${keyPrefix}-p-${index}`)}
+          {renderInlineContent(node.content, paragraphStyle, defaultColor, `${keyPrefix}-p-${index}`)}
         </Text>
       )
     }
@@ -268,7 +313,10 @@ function renderNode(
   switch (node.type) {
     case 'heading': {
       const level = (node.attrs?.level as number) ?? 1
-      const style = level === 1 ? styles.h1 : level === 2 ? styles.h2 : styles.h3
+      const style = getBlockStyle(
+        node,
+        level === 1 ? styles.h1 : level === 2 ? styles.h2 : styles.h3
+      )
       return (
         <Text key={key} style={style}>
           {renderInlineContent(node.content, style, textColor, key)}
@@ -282,14 +330,15 @@ function renderNode(
       )
       if (!hasContent) {
         return (
-          <Text key={key} style={styles.paragraph}>
+          <Text key={key} style={getBlockStyle(node, styles.paragraph)}>
             {' '}
           </Text>
         )
       }
+      const style = getBlockStyle(node, styles.paragraph)
       return (
-        <Text key={key} style={styles.paragraph}>
-          {renderInlineContent(node.content, styles.paragraph, textColor, key)}
+        <Text key={key} style={style}>
+          {renderInlineContent(node.content, style, textColor, key)}
         </Text>
       )
     }
