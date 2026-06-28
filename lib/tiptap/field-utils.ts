@@ -51,6 +51,12 @@ export function getTemplateUsesOrganisationLogo(
   return content?.attrs?.useOrganisationLogo === true
 }
 
+export function getTemplateUsesOrganisationLetterhead(
+  content: TiptapDocument | null | undefined
+): boolean {
+  return content?.attrs?.useOrganisationLetterhead === true
+}
+
 export function withTemplateTextColor(
   content: TiptapDocument | null,
   textColor: string
@@ -70,12 +76,36 @@ export function withTemplateOrganisationLogo(
   content: TiptapDocument | null,
   useOrganisationLogo: boolean
 ): TiptapDocument {
+  return withTemplateBranding(content, {
+    useOrganisationLogo,
+    useOrganisationLetterhead: getTemplateUsesOrganisationLetterhead(content),
+  })
+}
+
+export function withTemplateOrganisationLetterhead(
+  content: TiptapDocument | null,
+  useOrganisationLetterhead: boolean
+): TiptapDocument {
+  return withTemplateBranding(content, {
+    useOrganisationLogo: getTemplateUsesOrganisationLogo(content),
+    useOrganisationLetterhead,
+  })
+}
+
+export function withTemplateBranding(
+  content: TiptapDocument | null,
+  {
+    useOrganisationLogo,
+    useOrganisationLetterhead,
+  }: { useOrganisationLogo: boolean; useOrganisationLetterhead: boolean }
+): TiptapDocument {
   return {
     ...(content ?? { type: 'doc' as const, content: [{ type: 'paragraph' }] }),
     attrs: {
       ...(content?.attrs ?? {}),
       textColor: getTemplateTextColor(content),
       useOrganisationLogo,
+      useOrganisationLetterhead,
     },
   }
 }
@@ -165,6 +195,7 @@ export function normalizeTemplateContent(
       ...content.attrs,
       textColor: getTemplateTextColor(content),
       useOrganisationLogo: getTemplateUsesOrganisationLogo(content),
+      useOrganisationLetterhead: getTemplateUsesOrganisationLetterhead(content),
     },
     content: normalizeNodeList(content.content),
   }

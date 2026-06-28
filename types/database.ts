@@ -74,6 +74,7 @@ export interface TiptapDocument {
   attrs?: {
     textColor?: string
     useOrganisationLogo?: boolean
+    useOrganisationLetterhead?: boolean
   }
   content: TiptapNode[]
 }

@@ -38,6 +38,7 @@ interface TemplateEditorProps {
   defaultTextColor?: string
   organisationBranding?: OrganisationBranding | null
   useOrganisationLogo?: boolean
+  useOrganisationLetterhead?: boolean
   onChange?: (content: TiptapDocument) => void
   editable?: boolean
 }
@@ -47,11 +48,14 @@ export function TemplateEditor({
   defaultTextColor = DEFAULT_TEMPLATE_TEXT_COLOR,
   organisationBranding,
   useOrganisationLogo = false,
+  useOrganisationLetterhead = false,
   onChange,
   editable = true,
 }: TemplateEditorProps) {
   const logoUrl = useOrganisationLogo ? organisationBranding?.logoUrl ?? null : null
-  const letterheadUrl = organisationBranding?.letterheadUrl ?? null
+  const letterheadUrl = useOrganisationLetterhead
+    ? organisationBranding?.letterheadUrl ?? null
+    : null
   const hasLetterhead = Boolean(letterheadUrl)
   const hasLogo = Boolean(logoUrl)
   const canvasRef = useRef<HTMLDivElement>(null)

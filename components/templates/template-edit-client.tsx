@@ -22,7 +22,8 @@ import {
   validateTemplateFields,
   getTemplateTextColor,
   getTemplateUsesOrganisationLogo,
-  withTemplateOrganisationLogo,
+  getTemplateUsesOrganisationLetterhead,
+  withTemplateBranding,
 } from '@/lib/tiptap/field-utils'
 import type { OrganisationBranding, Template, TiptapDocument } from '@/types/database'
 
@@ -69,9 +70,15 @@ export function TemplateEditClient({
   const [useOrganisationLogo, setUseOrganisationLogo] = useState(() =>
     getTemplateUsesOrganisationLogo(template?.content ?? null)
   )
+  const [useOrganisationLetterhead, setUseOrganisationLetterhead] = useState(() =>
+    getTemplateUsesOrganisationLetterhead(template?.content ?? null)
+  )
   const [content, setContent] = useState<TiptapDocument | null>(() =>
     template?.content
-      ? withTemplateOrganisationLogo(template.content, getTemplateUsesOrganisationLogo(template.content))
+      ? withTemplateBranding(template.content, {
+          useOrganisationLogo: getTemplateUsesOrganisationLogo(template.content),
+          useOrganisationLetterhead: getTemplateUsesOrganisationLetterhead(template.content),
+        })
       : null
   )
   const [savedId, setSavedId] = useState<string | null>(template?.id ?? null)
@@ -81,10 +88,10 @@ export function TemplateEditClient({
       description: template?.description ?? '',
       isActive: template?.is_active ?? false,
       content: template?.content
-        ? withTemplateOrganisationLogo(
-            template.content,
-            getTemplateUsesOrganisationLogo(template.content)
-          )
+        ? withTemplateBranding(template.content, {
+            useOrganisationLogo: getTemplateUsesOrganisationLogo(template.content),
+            useOrganisationLetterhead: getTemplateUsesOrganisationLetterhead(template.content),
+          })
         : null,
     })
   )
@@ -92,12 +99,32 @@ export function TemplateEditClient({
   const [showPdfPreview, setShowPdfPreview] = useState(false)
 
   function handleContentChange(doc: TiptapDocument) {
-    setContent(withTemplateOrganisationLogo(doc, useOrganisationLogo))
+    setContent(
+      withTemplateBranding(doc, {
+        useOrganisationLogo,
+        useOrganisationLetterhead,
+      })
+    )
   }
 
   function handleUseOrganisationLogoChange(checked: boolean) {
     setUseOrganisationLogo(checked)
-    setContent((current) => withTemplateOrganisationLogo(current, checked))
+    setContent((current) =>
+      withTemplateBranding(current, {
+        useOrganisationLogo: checked,
+        useOrganisationLetterhead,
+      })
+    )
+  }
+
+  function handleUseOrganisationLetterheadChange(checked: boolean) {
+    setUseOrganisationLetterhead(checked)
+    setContent((current) =>
+      withTemplateBranding(current, {
+        useOrganisationLogo,
+        useOrganisationLetterhead: checked,
+      })
+    )
   }
 
   const currentSnapshot = useMemo(
@@ -121,7 +148,10 @@ export function TemplateEditClient({
       }
 
       const normalizedContent = normalizeTemplateContent(
-        withTemplateOrganisationLogo(content, useOrganisationLogo)
+        withTemplateBranding(content, {
+          useOrganisationLogo,
+          useOrganisationLetterhead,
+        })
       )
 
       if (options.validateFields) {
@@ -191,7 +221,18 @@ export function TemplateEditClient({
 
       return true
     },
-    [content, isActive, mode, name, description, router, savedId, template, useOrganisationLogo]
+    [
+      content,
+      isActive,
+      mode,
+      name,
+      description,
+      router,
+      savedId,
+      template,
+      useOrganisationLogo,
+      useOrganisationLetterhead,
+    ]
   )
 
   const saveAsDraft = useCallback(async () => {
@@ -278,6 +319,26 @@ export function TemplateEditClient({
             />
           </div>
 
+          <div className="flex items-center gap-2">
+            <Label
+              htmlFor="template-use-letterhead"
+              className="cursor-pointer text-sm text-signara-steel"
+              title={
+                organisationBranding?.letterheadUrl
+                  ? undefined
+                  : 'Upload an organisation letterhead first'
+              }
+            >
+              Include letterhead
+            </Label>
+            <Switch
+              id="template-use-letterhead"
+              checked={useOrganisationLetterhead && Boolean(organisationBranding?.letterheadUrl)}
+              disabled={!organisationBranding?.letterheadUrl}
+              onCheckedChange={handleUseOrganisationLetterheadChange}
+            />
+          </div>
+
           {content && (
             <Button
               type="button"
@@ -329,6 +390,7 @@ export function TemplateEditClient({
             defaultTextColor={getTemplateTextColor(content)}
             organisationBranding={organisationBranding}
             useOrganisationLogo={useOrganisationLogo}
+            useOrganisationLetterhead={useOrganisationLetterhead}
             onChange={handleContentChange}
           />
         </div>
