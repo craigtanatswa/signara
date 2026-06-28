@@ -45,6 +45,12 @@ export function getTemplateTextColor(content: TiptapDocument | null | undefined)
   return DEFAULT_TEMPLATE_TEXT_COLOR
 }
 
+export function getTemplateUsesOrganisationLogo(
+  content: TiptapDocument | null | undefined
+): boolean {
+  return content?.attrs?.useOrganisationLogo === true
+}
+
 export function withTemplateTextColor(
   content: TiptapDocument | null,
   textColor: string
@@ -56,6 +62,20 @@ export function withTemplateTextColor(
     attrs: {
       ...content.attrs,
       textColor: getTemplateTextColor({ ...content, attrs: { textColor } }),
+    },
+  }
+}
+
+export function withTemplateOrganisationLogo(
+  content: TiptapDocument | null,
+  useOrganisationLogo: boolean
+): TiptapDocument {
+  return {
+    ...(content ?? { type: 'doc' as const, content: [{ type: 'paragraph' }] }),
+    attrs: {
+      ...(content?.attrs ?? {}),
+      textColor: getTemplateTextColor(content),
+      useOrganisationLogo,
     },
   }
 }
@@ -144,6 +164,7 @@ export function normalizeTemplateContent(
     attrs: {
       ...content.attrs,
       textColor: getTemplateTextColor(content),
+      useOrganisationLogo: getTemplateUsesOrganisationLogo(content),
     },
     content: normalizeNodeList(content.content),
   }

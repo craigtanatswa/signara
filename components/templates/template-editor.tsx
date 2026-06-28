@@ -37,6 +37,7 @@ interface TemplateEditorProps {
   initialContent: TiptapDocument | null
   defaultTextColor?: string
   organisationBranding?: OrganisationBranding | null
+  useOrganisationLogo?: boolean
   onChange?: (content: TiptapDocument) => void
   editable?: boolean
 }
@@ -45,10 +46,11 @@ export function TemplateEditor({
   initialContent,
   defaultTextColor = DEFAULT_TEMPLATE_TEXT_COLOR,
   organisationBranding,
+  useOrganisationLogo = false,
   onChange,
   editable = true,
 }: TemplateEditorProps) {
-  const logoUrl = organisationBranding?.logoUrl ?? null
+  const logoUrl = useOrganisationLogo ? organisationBranding?.logoUrl ?? null : null
   const letterheadUrl = organisationBranding?.letterheadUrl ?? null
   const hasLetterhead = Boolean(letterheadUrl)
   const hasLogo = Boolean(logoUrl)
@@ -86,7 +88,7 @@ export function TemplateEditor({
       },
       immediatelyRender: false,
     },
-    [hasLogo]
+    []
   )
 
   useEffect(() => {
@@ -153,6 +155,7 @@ export function TemplateEditor({
           <TemplatePageGuide contentHeightPx={contentHeightPx} />
           <div
             className={`template-page-content relative z-[1] ${hasLetterhead ? 'bg-transparent' : ''}`}
+            data-has-logo={hasLogo ? 'true' : 'false'}
             style={{ minHeight: canvasHeightPx }}
           >
             <EditorContent editor={editor} />

@@ -16,6 +16,7 @@ import {
   FIELD_TYPE_LABELS,
   getFieldDisplayLabel,
   getTemplateTextColor,
+  getTemplateUsesOrganisationLogo,
   normalizeFormFieldAttrs,
 } from '@/lib/tiptap/field-utils'
 import { resolveOrganisationBrandingForPdf } from '@/lib/pdf/resolve-pdf-image'
@@ -389,7 +390,9 @@ function TemplatePdfDocument({
   textColor: string
   organisationBranding?: OrganisationBranding | null
 }) {
-  const logoUrl = organisationBranding?.logoUrl ?? null
+  const logoUrl = getTemplateUsesOrganisationLogo(content)
+    ? organisationBranding?.logoUrl ?? null
+    : null
   const letterheadUrl = organisationBranding?.letterheadUrl ?? null
   const styles = createStyles(textColor, Boolean(logoUrl))
 

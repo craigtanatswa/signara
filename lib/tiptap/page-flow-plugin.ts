@@ -22,9 +22,10 @@ function buildPageFlowDecorations(
     return DecorationSet.empty
   }
 
+  const hasLogo = canvas.dataset.hasLogo === 'true'
   const decorations: Decoration[] = []
   let spacerIndex = 0
-  let flowY = getPageTopInset(options.hasLogo)
+  let flowY = getPageTopInset(hasLogo)
   let previousElement: HTMLElement | null = null
 
   for (let i = 0; i < view.dom.childElementCount; i++) {
@@ -49,11 +50,11 @@ function buildPageFlowDecorations(
     const spacerHeight = calcRequiredSpacerHeight(
       flowY,
       blockHeight,
-      options.hasLogo
+      hasLogo
     )
 
     if (spacerHeight > 0) {
-      const lineSpacer = findLineSpacer(view, pos, element, canvas, options.hasLogo)
+      const lineSpacer = findLineSpacer(view, pos, element, canvas, hasLogo)
 
       if (lineSpacer) {
         decorations.push(

@@ -21,6 +21,8 @@ import {
   normalizeTemplateContent,
   validateTemplateFields,
   getTemplateTextColor,
+  getTemplateUsesOrganisationLogo,
+  withTemplateOrganisationLogo,
 } from '@/lib/tiptap/field-utils'
 import type { OrganisationBranding, Template, TiptapDocument } from '@/types/database'
 
@@ -64,21 +66,38 @@ export function TemplateEditClient({
   const [name, setName] = useState(template?.name ?? '')
   const [description, setDescription] = useState(template?.description ?? '')
   const [isActive, setIsActive] = useState(template?.is_active ?? false)
-  const [content, setContent] = useState<TiptapDocument | null>(template?.content ?? null)
+  const [useOrganisationLogo, setUseOrganisationLogo] = useState(() =>
+    getTemplateUsesOrganisationLogo(template?.content ?? null)
+  )
+  const [content, setContent] = useState<TiptapDocument | null>(() =>
+    template?.content
+      ? withTemplateOrganisationLogo(template.content, getTemplateUsesOrganisationLogo(template.content))
+      : null
+  )
   const [savedId, setSavedId] = useState<string | null>(template?.id ?? null)
   const [baselineSnapshot, setBaselineSnapshot] = useState(() =>
     buildSnapshot({
       name: template?.name ?? '',
       description: template?.description ?? '',
       isActive: template?.is_active ?? false,
-      content: template?.content ?? null,
+      content: template?.content
+        ? withTemplateOrganisationLogo(
+            template.content,
+            getTemplateUsesOrganisationLogo(template.content)
+          )
+        : null,
     })
   )
 
   const [showPdfPreview, setShowPdfPreview] = useState(false)
 
   function handleContentChange(doc: TiptapDocument) {
-    setContent(doc)
+    setContent(withTemplateOrganisationLogo(doc, useOrganisationLogo))
+  }
+
+  function handleUseOrganisationLogoChange(checked: boolean) {
+    setUseOrganisationLogo(checked)
+    setContent((current) => withTemplateOrganisationLogo(current, checked))
   }
 
   const currentSnapshot = useMemo(
@@ -101,7 +120,9 @@ export function TemplateEditClient({
         return false
       }
 
-      const normalizedContent = normalizeTemplateContent(content)
+      const normalizedContent = normalizeTemplateContent(
+        withTemplateOrganisationLogo(content, useOrganisationLogo)
+      )
 
       if (options.validateFields) {
         const validationError = validateTemplateFields(normalizedContent)
@@ -170,7 +191,7 @@ export function TemplateEditClient({
 
       return true
     },
-    [content, isActive, mode, name, description, router, savedId, template]
+    [content, isActive, mode, name, description, router, savedId, template, useOrganisationLogo]
   )
 
   const saveAsDraft = useCallback(async () => {
@@ -241,6 +262,22 @@ export function TemplateEditClient({
             <Switch id="template-active" checked={isActive} onCheckedChange={setIsActive} />
           </div>
 
+          <div className="flex items-center gap-2">
+            <Label
+              htmlFor="template-use-logo"
+              className="cursor-pointer text-sm text-signara-steel"
+              title={organisationBranding?.logoUrl ? undefined : 'Upload an organisation logo first'}
+            >
+              Include logo
+            </Label>
+            <Switch
+              id="template-use-logo"
+              checked={useOrganisationLogo && Boolean(organisationBranding?.logoUrl)}
+              disabled={!organisationBranding?.logoUrl}
+              onCheckedChange={handleUseOrganisationLogoChange}
+            />
+          </div>
+
           {content && (
             <Button
               type="button"
@@ -288,9 +325,10 @@ export function TemplateEditClient({
       <div className="flex-1 overflow-y-auto bg-signara-background p-6">
         <div className="mx-auto max-w-[850px]">
           <TemplateEditor
-            initialContent={template?.content ?? null}
-            defaultTextColor={getTemplateTextColor(template?.content ?? null)}
+            initialContent={content}
+            defaultTextColor={getTemplateTextColor(content)}
             organisationBranding={organisationBranding}
+            useOrganisationLogo={useOrganisationLogo}
             onChange={handleContentChange}
           />
         </div>
