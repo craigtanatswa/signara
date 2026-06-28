@@ -79,6 +79,38 @@ export function normalizeFormFieldAttrs(
   }
 }
 
+function withoutLayoutAttrs(attrs: TiptapNode['attrs']): TiptapNode['attrs'] {
+  if (!attrs || !('pageSplit' in attrs)) return attrs
+
+  const { pageSplit: _pageSplit, ...rest } = attrs
+  return Object.keys(rest).length ? rest : undefined
+}
+
+function normalizeNodeList(nodes: TiptapNode[] | undefined): TiptapNode[] {
+  const normalized: TiptapNode[] = []
+
+  for (const node of nodes ?? []) {
+    const next = normalizeNode(node)
+    const previous = normalized.at(-1)
+
+    if (
+      node.type === 'paragraph' &&
+      node.attrs?.pageSplit === true &&
+      previous?.type === 'paragraph'
+    ) {
+      previous.content = [
+        ...(previous.content ?? []),
+        ...(next.content ?? []),
+      ]
+      continue
+    }
+
+    normalized.push(next)
+  }
+
+  return normalized
+}
+
 function normalizeNode(node: TiptapNode): TiptapNode {
   if (node.type === 'formField') {
     const attrs = normalizeFormFieldAttrs(node.attrs)
@@ -91,11 +123,15 @@ function normalizeNode(node: TiptapNode): TiptapNode {
   if (node.content?.length) {
     return {
       ...node,
-      content: node.content.map(normalizeNode),
+      attrs: withoutLayoutAttrs(node.attrs),
+      content: normalizeNodeList(node.content),
     }
   }
 
-  return node
+  return {
+    ...node,
+    attrs: withoutLayoutAttrs(node.attrs),
+  }
 }
 
 export function normalizeTemplateContent(
@@ -109,7 +145,7 @@ export function normalizeTemplateContent(
       ...content.attrs,
       textColor: getTemplateTextColor(content),
     },
-    content: (content.content ?? []).map(normalizeNode),
+    content: normalizeNodeList(content.content),
   }
 }
 

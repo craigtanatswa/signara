@@ -4,6 +4,7 @@ import { useEditorState, type Editor } from '@tiptap/react'
 import {
   Bold,
   Italic,
+  Underline,
   Heading1,
   Heading2,
   List,
@@ -51,6 +52,7 @@ function ToolbarButton({ onClick, active, disabled, title, children }: ToolbarBu
       type="button"
       variant="ghost"
       size="sm"
+      onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
       disabled={disabled}
       title={title}
@@ -113,16 +115,23 @@ export function TemplateToolbar({
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBold().run()}
         active={editor.isActive('bold')}
-        title="Bold"
+        title="Bold (Ctrl+B)"
       >
         <Bold className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleItalic().run()}
         active={editor.isActive('italic')}
-        title="Italic"
+        title="Italic (Ctrl+I)"
       >
         <Italic className="size-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleUnderline().run()}
+        active={editor.isActive('underline')}
+        title="Underline (Ctrl+U)"
+      >
+        <Underline className="size-3.5" />
       </ToolbarButton>
 
       <Separator orientation="vertical" className="mx-1 h-5" />

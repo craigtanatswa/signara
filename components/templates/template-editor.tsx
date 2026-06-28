@@ -19,6 +19,7 @@ import {
   A4_PAGE_PADDING_Y_PX,
   A4_PAGE_WIDTH_PX,
   ORG_LOGO_BLOCK_HEIGHT_PX,
+  getA4CanvasHeightPx,
 } from '@/lib/tiptap/a4-layout'
 import { TemplateToolbar } from './template-toolbar'
 import {
@@ -98,33 +99,26 @@ export function TemplateEditor({
   useEffect(() => {
     if (!editor || !canvasRef.current) return
 
+    // IMPORTANT: always measure from .tiptap itself (not from .template-page-content
+    // which has minHeight: canvasHeightPx set on it — reading scrollHeight from that
+    // element creates a circular dependency that prevents the page from collapsing).
+    // .tiptap only has min-height: A4_PAGE_HEIGHT_PX so it can shrink freely.
+    const getTiptap = () =>
+      canvasRef.current?.querySelector<HTMLElement>('.tiptap') ?? null
+
     const measure = () => {
-      const pageContent = canvasRef.current?.querySelector('.template-page-content')
-      const proseMirror = canvasRef.current?.querySelector('.tiptap')
-      const measured =
-        pageContent instanceof HTMLElement
-          ? pageContent.scrollHeight
-          : proseMirror instanceof HTMLElement
-            ? proseMirror.scrollHeight
-            : A4_PAGE_HEIGHT_PX
+      const tiptap = getTiptap()
+      const measured = tiptap ? tiptap.scrollHeight : A4_PAGE_HEIGHT_PX
       setContentHeightPx(Math.max(measured, A4_PAGE_HEIGHT_PX))
     }
 
     measure()
 
-    const pageContent = canvasRef.current.querySelector('.template-page-content')
-    const proseMirror = canvasRef.current.querySelector('.tiptap')
-    const observeTarget =
-      pageContent instanceof HTMLElement
-        ? pageContent
-        : proseMirror instanceof HTMLElement
-          ? proseMirror
-          : null
-
-    if (!observeTarget) return
+    const tiptap = getTiptap()
+    if (!tiptap) return
 
     const resizeObserver = new ResizeObserver(measure)
-    resizeObserver.observe(observeTarget)
+    resizeObserver.observe(tiptap)
 
     editor.on('update', measure)
 
@@ -135,6 +129,8 @@ export function TemplateEditor({
   }, [editor])
 
   if (!editor) return null
+
+  const canvasHeightPx = getA4CanvasHeightPx(contentHeightPx)
 
   return (
     <div className="flex flex-col">
@@ -147,7 +143,7 @@ export function TemplateEditor({
         <div
           ref={canvasRef}
           className="relative mx-auto shadow-md"
-          style={{ width: A4_PAGE_WIDTH_PX }}
+          style={{ width: A4_PAGE_WIDTH_PX, minHeight: canvasHeightPx }}
         >
           <TemplatePageBackgrounds
             letterheadUrl={letterheadUrl}
@@ -157,6 +153,7 @@ export function TemplateEditor({
           <TemplatePageGuide contentHeightPx={contentHeightPx} />
           <div
             className={`template-page-content relative z-[1] ${hasLetterhead ? 'bg-transparent' : ''}`}
+            style={{ minHeight: canvasHeightPx }}
           >
             <EditorContent editor={editor} />
           </div>

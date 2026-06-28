@@ -43,15 +43,30 @@ export function blockOverlapsPageGap(
     const contentStart = pageStart + getPageTopInset(hasLogo)
     const contentEnd = getPageContentEnd(cycleIndex)
 
+    // Block starts inside the grey gap zone between two pages.
     if (blockTop >= greyStart && blockTop < greyEnd) {
       return true
     }
 
+    // Block straddles the grey gap zone.
     if (blockBottom > greyStart && blockTop < greyEnd) {
       return true
     }
 
+    // Block starts in the bottom-margin zone (past contentEnd, before the grey gap).
+    if (blockTop >= contentEnd && blockTop < greyStart) {
+      return true
+    }
+
+    // Block starts in the writable area but overflows past the bottom margin.
     if (blockTop >= contentStart && blockTop < contentEnd && blockBottom > contentEnd + 0.5) {
+      return true
+    }
+
+    // Block starts inside the logo band of page 2+ (cycle > 0).
+    // Cycle 0's logo area is protected by CSS padding-top on .tiptap; for all
+    // subsequent pages the spacer must push the block down to contentStart.
+    if (hasLogo && cycleIndex > 0 && blockTop >= pageStart && blockTop < contentStart) {
       return true
     }
   }
@@ -60,7 +75,54 @@ export function blockOverlapsPageGap(
 }
 
 export function calcPageGapSpacerHeight(blockTop: number, hasLogo: boolean): number {
+  const cycleIndex = Math.floor(blockTop / A4_PAGE_CYCLE_PX)
+  const pageStart = cycleIndex * A4_PAGE_CYCLE_PX
+  const contentStart = pageStart + getPageTopInset(hasLogo)
+
+  // Block is inside the logo band of THIS cycle's page (page 2+) → push it
+  // down to the writable area of the same page, not to the next page.
+  if (hasLogo && cycleIndex > 0 && blockTop < contentStart) {
+    return Math.max(1, Math.ceil(contentStart - blockTop))
+  }
+
+  // Block overlaps the grey gap or bottom margin → push to the NEXT page's
+  // writable area start.
   return Math.max(1, Math.ceil(getNextPageContentStart(blockTop, hasLogo) - blockTop))
+}
+
+/**
+ * Total spacer height needed before a block when laid out at `flowTop`.
+ * Simulates the push-down pass without reading DOM positions (avoids feedback
+ * loops where existing spacers hide the need for new ones, or vice versa).
+ */
+export function calcRequiredSpacerHeight(
+  flowTop: number,
+  blockHeight: number,
+  hasLogo: boolean
+): number {
+  let total = 0
+  let y = flowTop
+  let guard = 0
+
+  while (blockOverlapsPageGap(y, blockHeight, hasLogo) && guard++ < 10) {
+    const step = calcPageGapSpacerHeight(y, hasLogo)
+    total += step
+    y += step
+  }
+
+  return total
+}
+
+/** Collapsed vertical gap between two consecutive block siblings. */
+export function getCollapsedBlockGap(
+  previous: HTMLElement | null,
+  current: HTMLElement
+): number {
+  if (!previous) return 0
+
+  const currentMarginTop = parseFloat(getComputedStyle(current).marginTop) || 0
+  const previousMarginBottom = parseFloat(getComputedStyle(previous).marginBottom) || 0
+  return Math.max(previousMarginBottom, currentMarginTop)
 }
 
 export function getCanvasRelativeTop(element: HTMLElement, canvas: HTMLElement): number {
