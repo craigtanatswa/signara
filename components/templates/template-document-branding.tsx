@@ -38,7 +38,7 @@ export function TemplatePageBackgrounds({
           <img
             src={letterheadUrl}
             alt=""
-            className="size-full object-cover object-top"
+            className="size-full object-contain object-top"
           />
         </div>
       ))}

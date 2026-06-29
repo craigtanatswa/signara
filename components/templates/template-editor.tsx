@@ -36,7 +36,13 @@ import {
   TemplatePageLogos,
 } from './template-document-branding'
 import type { OrganisationBranding, TiptapDocument } from '@/types/database'
-import { useEffect, useRef, useState } from 'react'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react'
 
 interface TemplateEditorProps {
   initialContent: TiptapDocument | null
@@ -45,18 +51,24 @@ interface TemplateEditorProps {
   useOrganisationLogo?: boolean
   useOrganisationLetterhead?: boolean
   onChange?: (content: TiptapDocument) => void
+  onDirty?: () => void
   editable?: boolean
 }
 
-export function TemplateEditor({
+export interface TemplateEditorHandle {
+  getContent: () => TiptapDocument | null
+}
+
+export const TemplateEditor = forwardRef<TemplateEditorHandle, TemplateEditorProps>(function TemplateEditor({
   initialContent,
   defaultTextColor = DEFAULT_TEMPLATE_TEXT_COLOR,
   organisationBranding,
   useOrganisationLogo = false,
   useOrganisationLetterhead = false,
   onChange,
+  onDirty,
   editable = true,
-}: TemplateEditorProps) {
+}: TemplateEditorProps, ref) {
   const logoUrl = useOrganisationLogo ? organisationBranding?.logoUrl ?? null : null
   const letterheadUrl = useOrganisationLetterhead
     ? organisationBranding?.letterheadUrl ?? null
@@ -64,7 +76,18 @@ export function TemplateEditor({
   const hasLetterhead = Boolean(letterheadUrl)
   const hasLogo = Boolean(logoUrl)
   const canvasRef = useRef<HTMLDivElement>(null)
+  const onChangeRef = useRef(onChange)
+  const onDirtyRef = useRef(onDirty)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [contentHeightPx, setContentHeightPx] = useState(A4_PAGE_HEIGHT_PX)
+
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
+
+  useEffect(() => {
+    onDirtyRef.current = onDirty
+  }, [onDirty])
 
   const editor = useEditor(
     {
@@ -98,13 +121,34 @@ export function TemplateEditor({
         },
       },
       onUpdate({ editor }) {
-        const normalized = normalizeTemplateContent(editor.getJSON() as TiptapDocument)
-        if (normalized) onChange?.(normalized)
+        onDirtyRef.current?.()
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current)
+        }
+        debounceTimerRef.current = setTimeout(() => {
+          onChangeRef.current?.(editor.getJSON() as TiptapDocument)
+        }, 250)
       },
       immediatelyRender: false,
     },
     []
   )
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      getContent: () => (editor ? (editor.getJSON() as TiptapDocument) : null),
+    }),
+    [editor]
+  )
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!editor) return
@@ -123,10 +167,18 @@ export function TemplateEditor({
     const getTiptap = () =>
       canvasRef.current?.querySelector<HTMLElement>('.tiptap') ?? null
 
+    let frame = 0
+
     const measure = () => {
       const tiptap = getTiptap()
       const measured = tiptap ? tiptap.scrollHeight : A4_PAGE_HEIGHT_PX
-      setContentHeightPx(Math.max(measured, A4_PAGE_HEIGHT_PX))
+      const nextHeight = Math.max(measured, A4_PAGE_HEIGHT_PX)
+      setContentHeightPx((current) => (Math.abs(current - nextHeight) > 1 ? nextHeight : current))
+    }
+
+    const scheduleMeasure = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(measure)
     }
 
     measure()
@@ -137,11 +189,12 @@ export function TemplateEditor({
     const resizeObserver = new ResizeObserver(measure)
     resizeObserver.observe(tiptap)
 
-    editor.on('update', measure)
+    editor.on('update', scheduleMeasure)
 
     return () => {
+      cancelAnimationFrame(frame)
       resizeObserver.disconnect()
-      editor.off('update', measure)
+      editor.off('update', scheduleMeasure)
     }
   }, [editor])
 
@@ -314,4 +367,4 @@ export function TemplateEditor({
       `}</style>
     </div>
   )
-}
+})

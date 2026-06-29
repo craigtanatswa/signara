@@ -123,9 +123,9 @@ export function OrgInfoForm({ organisation, plan }: OrgInfoFormProps) {
 
       <OrgBrandingUpload
         label="Letterhead background"
-        description="Optional. Full-page background image behind template content on every page (PNG recommended)."
+        description="Optional. Full-page background on every template page. Upload PNG or PDF (Word: Save As PDF). PDFs are converted to high-resolution PNG automatically."
         currentUrl={organisation.letterhead_url}
-        accept="image/png,image/jpeg,image/webp,image/gif"
+        accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
         emptyHint="No letterhead uploaded — templates use a plain white page background."
         previewAlt="Letterhead background preview"
         previewClassName="max-h-40 max-w-full object-contain"

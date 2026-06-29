@@ -2,8 +2,14 @@
  * react-pdf often cannot render remote storage URLs (CORS). Fetch and convert to a
  * data URI so logos and letterheads appear reliably in PDFViewer.
  */
+const resolvedImageCache = new Map<string, string>()
+
 export async function resolvePdfImageSrc(url: string | null): Promise<string | null> {
   if (!url) return null
+  if (url.startsWith('data:')) return url
+
+  const cached = resolvedImageCache.get(url)
+  if (cached) return cached
 
   try {
     const response = await fetch(url, { mode: 'cors', cache: 'no-store' })
@@ -12,7 +18,7 @@ export async function resolvePdfImageSrc(url: string | null): Promise<string | n
     }
 
     const blob = await response.blob()
-    return await new Promise<string>((resolve, reject) => {
+    const dataUri = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader()
       reader.onloadend = () => {
         if (typeof reader.result === 'string') {
@@ -24,6 +30,8 @@ export async function resolvePdfImageSrc(url: string | null): Promise<string | n
       reader.onerror = () => reject(reader.error)
       reader.readAsDataURL(blob)
     })
+    resolvedImageCache.set(url, dataUri)
+    return dataUri
   } catch {
     return url
   }

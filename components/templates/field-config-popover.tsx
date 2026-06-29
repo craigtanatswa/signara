@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,16 +42,31 @@ export function FieldConfigPopover({
   const isConfigured = attrs.configured !== false
   const fieldTypeLabel = FIELD_TYPE_LABELS[attrs.fieldType as FieldType]
 
-  useEffect(() => {
-    if (open) {
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen) {
       const defaultLabel = getDefaultFieldLabel(attrs.fieldType)
       setLabel(attrs.label?.trim() || defaultLabel)
       setRequired(attrs.required)
       setOptions(attrs.options ?? [])
       setLabelError(null)
       setTimeout(() => labelInputRef.current?.focus(), 0)
+    } else if (!isConfigured) {
+      // Keep the field in the document with its current/default label when the
+      // popover closes — only the Delete button removes a field.
+      const trimmedLabel = label.trim() || getDefaultFieldLabel(attrs.fieldType)
+      onUpdate({
+        label: trimmedLabel,
+        required,
+        options:
+          attrs.fieldType === 'dropdown'
+            ? options.map((option) => option.trim()).filter(Boolean)
+            : [],
+        configured: true,
+      })
     }
-  }, [open, attrs.fieldType, attrs.label, attrs.required, attrs.options])
+
+    onOpenChange(nextOpen)
+  }
 
   function handleSave() {
     const trimmedLabel = label.trim()
@@ -91,25 +106,6 @@ export function FieldConfigPopover({
   function handleDelete() {
     onDelete()
     onOpenChange(false)
-  }
-
-  function handleOpenChange(nextOpen: boolean) {
-    if (!nextOpen && !isConfigured) {
-      // Keep the field in the document with its current/default label when the
-      // popover closes — only the Delete button removes a field.
-      const trimmedLabel = label.trim() || getDefaultFieldLabel(attrs.fieldType)
-      onUpdate({
-        label: trimmedLabel,
-        required,
-        options:
-          attrs.fieldType === 'dropdown'
-            ? options.map((option) => option.trim()).filter(Boolean)
-            : [],
-        configured: true,
-      })
-    }
-
-    onOpenChange(nextOpen)
   }
 
   function addOption() {

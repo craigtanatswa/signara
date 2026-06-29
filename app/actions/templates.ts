@@ -3,7 +3,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { normalizeTemplateContent } from '@/lib/tiptap/field-utils'
 import type { TiptapDocument } from '@/types/database'
 
 async function getAuthenticatedAdmin() {
@@ -15,7 +14,7 @@ async function getAuthenticatedAdmin() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('*')
+    .select('id, organisation_id, role')
     .eq('id', authUser.id)
     .single()
 
@@ -46,15 +45,13 @@ export async function createTemplate(data: {
     return { error: nameError }
   }
 
-  const normalizedContent = normalizeTemplateContent(data.content)
-
   const { data: template, error } = await supabase
     .from('templates')
     .insert({
       organisation_id: profile.organisation_id,
       name: data.name.trim(),
       description: data.description,
-      content: normalizedContent,
+      content: data.content,
       workflow: [],
       created_by: profile.id,
       version: 1,
@@ -100,14 +97,12 @@ export async function updateTemplate(
     return { error: 'Template not found' }
   }
 
-  const normalizedContent = normalizeTemplateContent(data.content)
-
   const { error } = await supabase
     .from('templates')
     .update({
       name: data.name.trim(),
       description: data.description,
-      content: normalizedContent,
+      content: data.content,
       is_active: data.is_active,
       version: (existing.version ?? 1) + 1,
       updated_at: new Date().toISOString(),
@@ -120,7 +115,6 @@ export async function updateTemplate(
   }
 
   revalidatePath('/dashboard/templates')
-  revalidatePath(`/dashboard/templates/${id}/edit`)
   return { success: true }
 }
 

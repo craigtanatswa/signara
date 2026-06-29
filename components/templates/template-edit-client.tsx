@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
+import { useCallback, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
@@ -12,10 +12,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { BackLink } from '@/components/layout/back-link'
-import { TemplateEditor } from './template-editor'
+import { TemplateEditor, type TemplateEditorHandle } from './template-editor'
 import { TemplateUnsavedDialog } from './template-unsaved-dialog'
 import { createTemplate, updateTemplate } from '@/app/actions/templates'
-import { getOrganisationBrandingForOrg } from '@/app/actions/organisation-branding'
 import { useTemplateUnsavedGuard } from '@/hooks/use-template-unsaved-guard'
 import {
   normalizeTemplateContent,
@@ -58,11 +57,11 @@ function buildSnapshot({
 export function TemplateEditClient({
   template,
   mode,
-  organisationId,
   organisationBranding,
 }: TemplateEditClientProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const editorRef = useRef<TemplateEditorHandle>(null)
 
   const [name, setName] = useState(template?.name ?? '')
   const [description, setDescription] = useState(template?.description ?? '')
@@ -82,6 +81,7 @@ export function TemplateEditClient({
       : null
   )
   const [savedId, setSavedId] = useState<string | null>(template?.id ?? null)
+  const [isContentDirty, setIsContentDirty] = useState(false)
   const [baselineSnapshot, setBaselineSnapshot] = useState(() =>
     buildSnapshot({
       name: template?.name ?? '',
@@ -97,6 +97,7 @@ export function TemplateEditClient({
   )
 
   const [showPdfPreview, setShowPdfPreview] = useState(false)
+  const [previewContent, setPreviewContent] = useState<TiptapDocument | null>(null)
 
   function handleContentChange(doc: TiptapDocument) {
     setContent(
@@ -107,8 +108,23 @@ export function TemplateEditClient({
     )
   }
 
+  const getCurrentEditorContent = useCallback(
+    () => editorRef.current?.getContent() ?? content,
+    [content]
+  )
+
+  const getCurrentBrandedContent = useCallback(
+    () =>
+      withTemplateBranding(getCurrentEditorContent(), {
+        useOrganisationLogo,
+        useOrganisationLetterhead,
+      }),
+    [getCurrentEditorContent, useOrganisationLogo, useOrganisationLetterhead]
+  )
+
   function handleUseOrganisationLogoChange(checked: boolean) {
     setUseOrganisationLogo(checked)
+    setIsContentDirty(true)
     setContent((current) =>
       withTemplateBranding(current, {
         useOrganisationLogo: checked,
@@ -119,6 +135,7 @@ export function TemplateEditClient({
 
   function handleUseOrganisationLetterheadChange(checked: boolean) {
     setUseOrganisationLetterhead(checked)
+    setIsContentDirty(true)
     setContent((current) =>
       withTemplateBranding(current, {
         useOrganisationLogo,
@@ -131,7 +148,7 @@ export function TemplateEditClient({
     () => buildSnapshot({ name, description, isActive, content }),
     [name, description, isActive, content]
   )
-  const isDirty = currentSnapshot !== baselineSnapshot
+  const isDirty = isContentDirty || currentSnapshot !== baselineSnapshot
   const hasTitle = name.trim().length > 0
 
   const persistTemplate = useCallback(
@@ -147,12 +164,7 @@ export function TemplateEditClient({
         return false
       }
 
-      const normalizedContent = normalizeTemplateContent(
-        withTemplateBranding(content, {
-          useOrganisationLogo,
-          useOrganisationLetterhead,
-        })
-      )
+      const normalizedContent = normalizeTemplateContent(getCurrentBrandedContent())
 
       if (options.validateFields) {
         const validationError = validateTemplateFields(normalizedContent)
@@ -187,6 +199,8 @@ export function TemplateEditClient({
             content: normalizedContent,
           })
         )
+        setContent(normalizedContent)
+        setIsContentDirty(false)
 
         if (options.redirectAfterCreate !== false) {
           router.replace(`/dashboard/templates/${result.id}/edit`)
@@ -214,6 +228,8 @@ export function TemplateEditClient({
           content: normalizedContent,
         })
       )
+      setContent(normalizedContent)
+      setIsContentDirty(false)
 
       if (options.asDraft) {
         setIsActive(false)
@@ -222,7 +238,7 @@ export function TemplateEditClient({
       return true
     },
     [
-      content,
+      getCurrentBrandedContent,
       isActive,
       mode,
       name,
@@ -230,8 +246,6 @@ export function TemplateEditClient({
       router,
       savedId,
       template,
-      useOrganisationLogo,
-      useOrganisationLetterhead,
     ]
   )
 
@@ -269,6 +283,11 @@ export function TemplateEditClient({
         toast.success('Template saved')
       }
     })
+  }
+
+  function handlePreview() {
+    setPreviewContent(normalizeTemplateContent(getCurrentBrandedContent()))
+    setShowPdfPreview(true)
   }
 
   const templateId = savedId ?? template?.id
@@ -339,13 +358,13 @@ export function TemplateEditClient({
             />
           </div>
 
-          {content && (
+          {(content || isContentDirty) && (
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="gap-1.5 border-signara-steel/40 text-signara-navy hover:bg-signara-navy/5"
-              onClick={() => setShowPdfPreview(true)}
+              onClick={handlePreview}
             >
               <Eye className="size-3.5" />
               Preview PDF
@@ -386,12 +405,14 @@ export function TemplateEditClient({
       <div className="flex-1 overflow-y-auto bg-signara-background p-6">
         <div className="mx-auto max-w-[850px]">
           <TemplateEditor
+            ref={editorRef}
             initialContent={content}
             defaultTextColor={getTemplateTextColor(content)}
             organisationBranding={organisationBranding}
             useOrganisationLogo={useOrganisationLogo}
             useOrganisationLetterhead={useOrganisationLetterhead}
             onChange={handleContentChange}
+            onDirty={() => setIsContentDirty(true)}
           />
         </div>
       </div>
@@ -404,11 +425,10 @@ export function TemplateEditClient({
         onCancel={handleCancelLeave}
       />
 
-      {showPdfPreview && content && (
+      {showPdfPreview && previewContent && (
         <PdfPreviewModal
-          content={content}
+          content={previewContent}
           name={name || 'Template preview'}
-          organisationId={organisationId}
           organisationBranding={organisationBranding}
           onClose={() => setShowPdfPreview(false)}
         />
@@ -430,35 +450,14 @@ const TemplatePdfPreview = dynamic(
 function PdfPreviewModal({
   content,
   name,
-  organisationId,
   organisationBranding: initialBranding,
   onClose,
 }: {
   content: TiptapDocument
   name: string
-  organisationId: string
   organisationBranding?: OrganisationBranding | null
   onClose: () => void
 }) {
-  const [organisationBranding, setOrganisationBranding] = useState(initialBranding ?? null)
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadBranding() {
-      const branding = await getOrganisationBrandingForOrg(organisationId)
-      if (!cancelled) {
-        setOrganisationBranding(branding)
-      }
-    }
-
-    loadBranding()
-
-    return () => {
-      cancelled = true
-    }
-  }, [organisationId])
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
@@ -476,10 +475,10 @@ function PdfPreviewModal({
         </div>
         <div className="flex-1">
           <TemplatePdfPreview
-            key={`${organisationBranding?.logoUrl ?? 'no-logo'}-${organisationBranding?.letterheadUrl ?? 'no-letterhead'}`}
+            key={`${initialBranding?.logoUrl ?? 'no-logo'}-${initialBranding?.letterheadUrl ?? 'no-letterhead'}`}
             content={content}
             name={name}
-            organisationBranding={organisationBranding}
+            organisationBranding={initialBranding ?? null}
           />
         </div>
       </div>

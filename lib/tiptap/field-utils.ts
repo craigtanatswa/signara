@@ -133,7 +133,8 @@ export function normalizeFormFieldAttrs(
 function withoutLayoutAttrs(attrs: TiptapNode['attrs']): TiptapNode['attrs'] {
   if (!attrs || !('pageSplit' in attrs)) return attrs
 
-  const { pageSplit: _pageSplit, ...rest } = attrs
+  const rest = { ...attrs }
+  delete rest.pageSplit
   return Object.keys(rest).length ? rest : undefined
 }
 

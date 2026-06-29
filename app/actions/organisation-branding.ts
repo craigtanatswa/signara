@@ -3,11 +3,13 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { convertPdfFirstPageToPng } from '@/lib/letterhead/convert-pdf-to-png'
 import {
   BRANDING_IMAGE_TYPES,
   getExtensionFromMime,
   getOrganisationAssetPath,
   getPublicAssetUrl,
+  isLetterheadUploadMime,
   LETTERHEAD_MAX_BYTES,
   LOGO_MAX_BYTES,
   ORGANISATION_ASSETS_BUCKET,
@@ -45,10 +47,7 @@ async function getAdminOrganisationId() {
   return { supabase, organisationId: profile.organisation_id as string }
 }
 
-function validateBrandingFile(
-  file: File,
-  kind: BrandingAssetKind
-): string | null {
+function validateLogoFile(file: File): string | null {
   if (!file || file.size === 0) {
     return 'No file selected.'
   }
@@ -57,9 +56,25 @@ function validateBrandingFile(
     return 'Please upload a PNG, JPEG, WebP, or GIF image.'
   }
 
-  const maxBytes = kind === 'logo' ? LOGO_MAX_BYTES : LETTERHEAD_MAX_BYTES
-  if (file.size > maxBytes) {
-    const maxMb = maxBytes / (1024 * 1024)
+  if (file.size > LOGO_MAX_BYTES) {
+    const maxMb = LOGO_MAX_BYTES / (1024 * 1024)
+    return `File must be ${maxMb} MB or smaller.`
+  }
+
+  return null
+}
+
+function validateLetterheadFile(file: File): string | null {
+  if (!file || file.size === 0) {
+    return 'No file selected.'
+  }
+
+  if (!isLetterheadUploadMime(file.type)) {
+    return 'Please upload a PNG, JPEG, WebP, GIF, or PDF file.'
+  }
+
+  if (file.size > LETTERHEAD_MAX_BYTES) {
+    const maxMb = LETTERHEAD_MAX_BYTES / (1024 * 1024)
     return `File must be ${maxMb} MB or smaller.`
   }
 
@@ -80,7 +95,7 @@ async function uploadBrandingAsset(
     return { success: false, error: 'No file selected.' }
   }
 
-  const validationError = validateBrandingFile(file, kind)
+  const validationError = validateLogoFile(file)
   if (validationError) {
     return { success: false, error: validationError }
   }
@@ -132,6 +147,89 @@ async function uploadBrandingAsset(
   }
 }
 
+async function uploadLetterheadAsset(formData: FormData): Promise<BrandingUploadResult> {
+  const auth = await getAdminOrganisationId()
+  if ('error' in auth) {
+    return { success: false, error: auth.error ?? 'Unauthorized' }
+  }
+
+  const file = formData.get('file')
+  if (!(file instanceof File)) {
+    return { success: false, error: 'No file selected.' }
+  }
+
+  const validationError = validateLetterheadFile(file)
+  if (validationError) {
+    return { success: false, error: validationError }
+  }
+
+  const { supabase, organisationId } = auth
+  let uploadBuffer: Buffer
+  let contentType: string
+  let message = 'Letterhead uploaded successfully.'
+
+  if (file.type === 'application/pdf') {
+    try {
+      uploadBuffer = await convertPdfFirstPageToPng(Buffer.from(await file.arrayBuffer()))
+    } catch (error) {
+      console.error('Letterhead PDF conversion failed:', error)
+      return {
+        success: false,
+        error:
+          'Could not convert that PDF. Use a single-page letterhead exported from Word as PDF, or upload a PNG instead.',
+      }
+    }
+    contentType = 'image/png'
+    message = 'Letterhead uploaded and converted from PDF successfully.'
+  } else {
+    uploadBuffer = Buffer.from(await file.arrayBuffer())
+    contentType = file.type
+  }
+
+  const extension = getExtensionFromMime(contentType)
+  if (!extension) {
+    return { success: false, error: 'Unsupported file type.' }
+  }
+
+  const path = getOrganisationAssetPath(organisationId, 'letterhead', extension)
+
+  const { error: uploadError } = await supabase.storage
+    .from(ORGANISATION_ASSETS_BUCKET)
+    .upload(path, uploadBuffer, {
+      upsert: true,
+      contentType,
+      cacheControl: '3600',
+    })
+
+  if (uploadError) {
+    return { success: false, error: uploadError.message }
+  }
+
+  const publicUrl = getPublicAssetUrl(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    `${path}?v=${Date.now()}`
+  )
+
+  const { error: updateError } = await supabase
+    .from('organisations')
+    .update({ letterhead_url: publicUrl })
+    .eq('id', organisationId)
+
+  if (updateError) {
+    return { success: false, error: updateError.message }
+  }
+
+  revalidatePath('/dashboard/settings/organisation')
+  revalidatePath('/dashboard/templates/new')
+  revalidatePath('/dashboard/templates')
+
+  return {
+    success: true,
+    url: publicUrl,
+    message,
+  }
+}
+
 export async function uploadOrganisationLogo(
   formData: FormData
 ): Promise<BrandingUploadResult> {
@@ -141,7 +239,7 @@ export async function uploadOrganisationLogo(
 export async function uploadOrganisationLetterhead(
   formData: FormData
 ): Promise<BrandingUploadResult> {
-  return uploadBrandingAsset(formData, 'letterhead')
+  return uploadLetterheadAsset(formData)
 }
 
 export async function removeOrganisationLogo(): Promise<ActionResult> {

@@ -25,13 +25,6 @@ function parseString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback
 }
 
-function parseBoolean(value: unknown, fallback = false): boolean {
-  if (typeof value === 'boolean') return value
-  if (value === 'true') return true
-  if (value === 'false') return false
-  return fallback
-}
-
 function parseOptions(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.filter((item): item is string => typeof item === 'string')

@@ -13,10 +13,7 @@ export interface PageFlowOptions {
 
 const pageFlowPluginKey = new PluginKey<DecorationSet>('templatePageFlow')
 
-function buildPageFlowDecorations(
-  view: EditorView,
-  options: PageFlowOptions
-): DecorationSet {
+function buildPageFlowDecorations(view: EditorView): DecorationSet {
   const canvas = view.dom.closest('.template-page-content')
   if (!(canvas instanceof HTMLElement)) {
     return DecorationSet.empty
@@ -186,7 +183,7 @@ function decorationSetsEqual(a: DecorationSet, b: DecorationSet): boolean {
   return true
 }
 
-function createPageFlowPlugin(options: PageFlowOptions) {
+function createPageFlowPlugin() {
   return new Plugin({
     key: pageFlowPluginKey,
     state: {
@@ -226,7 +223,7 @@ function createPageFlowPlugin(options: PageFlowOptions) {
           dispatching = false
         }
 
-        const next = buildPageFlowDecorations(view, options)
+        const next = buildPageFlowDecorations(view)
         const current =
           pageFlowPluginKey.getState(view.state) ?? DecorationSet.empty
 
@@ -270,6 +267,6 @@ export const PageFlow = Extension.create<PageFlowOptions>({
   },
 
   addProseMirrorPlugins() {
-    return [createPageFlowPlugin(this.options)]
+    return [createPageFlowPlugin()]
   },
 })

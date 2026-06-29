@@ -35,14 +35,14 @@ export function FormFieldNodeView({ node, updateAttributes, deleteNode, selected
     setPopoverOpen(open)
   }
 
-  function confirmUnconfiguredField() {
+  const confirmUnconfiguredField = useCallback(() => {
     if (attrs.configured === false) {
       updateAttributes({
         label: getFieldDisplayLabel(attrs),
         configured: true,
       })
     }
-  }
+  }, [attrs, updateAttributes])
 
   useEffect(() => {
     const openHandler = (e: Event) => {
@@ -64,7 +64,7 @@ export function FormFieldNodeView({ node, updateAttributes, deleteNode, selected
       window.removeEventListener('tiptap:open-field', openHandler)
       window.removeEventListener('tiptap:close-field-popovers', closeHandler)
     }
-  }, [attrs.configured, attrs.fieldId, attrs.fieldType, attrs.label, scrollFieldIntoView, updateAttributes])
+  }, [attrs.fieldId, confirmUnconfiguredField, scrollFieldIntoView])
 
   useEffect(() => {
     if (popoverOpen) {

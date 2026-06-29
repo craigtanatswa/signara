@@ -25,6 +25,8 @@ import { resolveOrganisationBrandingForPdf } from '@/lib/pdf/resolve-pdf-image'
 import { ORG_LOGO_BLOCK_HEIGHT_PX } from '@/lib/tiptap/a4-layout'
 
 const ORG_LOGO_BLOCK_PT = Math.round(ORG_LOGO_BLOCK_HEIGHT_PX * 0.75)
+const A4_WIDTH_PT = 595.28
+const A4_HEIGHT_PT = 841.89
 
 function createStyles(textColor: string, hasLogo: boolean) {
   return StyleSheet.create({
@@ -42,8 +44,10 @@ function createStyles(textColor: string, hasLogo: boolean) {
       position: 'absolute',
       top: 0,
       left: 0,
-      width: '100%',
-      height: '100%',
+      width: A4_WIDTH_PT,
+      height: A4_HEIGHT_PT,
+      objectFit: 'contain',
+      objectPosition: 'top',
     },
     logoBand: {
       position: 'absolute',
@@ -452,11 +456,13 @@ function TemplatePdfDocument({
     <Document title={name}>
       <Page size="A4" style={styles.page}>
         {letterheadUrl ? (
+          // eslint-disable-next-line jsx-a11y/alt-text -- decorative background layer in PDF output
           <Image fixed src={letterheadUrl} style={styles.letterheadBackground} />
         ) : null}
 
         {logoUrl ? (
           <View fixed style={styles.logoBand}>
+            {/* eslint-disable-next-line jsx-a11y/alt-text -- organisation logo in PDF output */}
             <Image src={logoUrl} style={styles.logoImage} />
           </View>
         ) : null}
