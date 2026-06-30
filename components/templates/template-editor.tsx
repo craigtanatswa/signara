@@ -17,14 +17,11 @@ import { FontSize, ParagraphFormatting, TabIndent } from '@/lib/tiptap/formattin
 import { PageFlow } from '@/lib/tiptap/page-flow-plugin'
 import { DEFAULT_TEMPLATE_TEXT_COLOR, normalizeTemplateContent } from '@/lib/tiptap/field-utils'
 import {
-  A4_PAGE_GAP_PX,
-  A4_PAGE_HEIGHT_PX,
-  A4_PAGE_PADDING_X_PX,
-  A4_PAGE_PADDING_Y_PX,
-  A4_PAGE_WIDTH_PX,
-  ORG_LOGO_BLOCK_HEIGHT_PX,
-  getA4CanvasHeightPx,
-} from '@/lib/tiptap/a4-layout'
+  getCanvasHeightPx,
+  getPageLayout,
+  hasLetterheadForOrientation,
+  resolveLetterheadUrl,
+} from '@/lib/tiptap/page-size'
 import { DEFAULT_TEMPLATE_FONT_SIZE_PT } from '@/lib/tiptap/font-size'
 import { TemplateToolbar } from './template-toolbar'
 import {
@@ -35,11 +32,12 @@ import {
   TemplatePageBackgrounds,
   TemplatePageLogos,
 } from './template-document-branding'
-import type { OrganisationBranding, TiptapDocument } from '@/types/database'
+import type { OrganisationBranding, PageOrientation, TiptapDocument } from '@/types/database'
 import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -50,6 +48,9 @@ interface TemplateEditorProps {
   organisationBranding?: OrganisationBranding | null
   useOrganisationLogo?: boolean
   useOrganisationLetterhead?: boolean
+  pageOrientation?: PageOrientation
+  onUseOrganisationLogoChange?: (checked: boolean) => void
+  onUseOrganisationLetterheadChange?: (checked: boolean) => void
   onChange?: (content: TiptapDocument) => void
   onDirty?: () => void
   editable?: boolean
@@ -65,21 +66,27 @@ export const TemplateEditor = forwardRef<TemplateEditorHandle, TemplateEditorPro
   organisationBranding,
   useOrganisationLogo = false,
   useOrganisationLetterhead = false,
+  pageOrientation = 'portrait',
+  onUseOrganisationLogoChange,
+  onUseOrganisationLetterheadChange,
   onChange,
   onDirty,
   editable = true,
 }: TemplateEditorProps, ref) {
+  const layout = useMemo(() => getPageLayout(pageOrientation), [pageOrientation])
   const logoUrl = useOrganisationLogo ? organisationBranding?.logoUrl ?? null : null
   const letterheadUrl = useOrganisationLetterhead
-    ? organisationBranding?.letterheadUrl ?? null
+    ? resolveLetterheadUrl(organisationBranding, pageOrientation)
     : null
   const hasLetterhead = Boolean(letterheadUrl)
   const hasLogo = Boolean(logoUrl)
+  const logoAvailable = Boolean(organisationBranding?.logoUrl)
+  const letterheadAvailable = hasLetterheadForOrientation(organisationBranding, pageOrientation)
   const canvasRef = useRef<HTMLDivElement>(null)
   const onChangeRef = useRef(onChange)
   const onDirtyRef = useRef(onDirty)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [contentHeightPx, setContentHeightPx] = useState(A4_PAGE_HEIGHT_PX)
+  const [contentHeightPx, setContentHeightPx] = useState(layout.heightPx)
 
   useEffect(() => {
     onChangeRef.current = onChange
@@ -111,7 +118,7 @@ export const TemplateEditor = forwardRef<TemplateEditorHandle, TemplateEditorPro
         FormFieldExtension,
         ParagraphFormatting,
         TabIndent,
-        PageFlow.configure({ hasLogo }),
+        PageFlow.configure({ hasLogo, pageOrientation }),
       ],
       content: normalizeTemplateContent(initialContent) ?? undefined,
       editable,
@@ -160,10 +167,6 @@ export const TemplateEditor = forwardRef<TemplateEditorHandle, TemplateEditorPro
   useEffect(() => {
     if (!editor || !canvasRef.current) return
 
-    // IMPORTANT: always measure from .tiptap itself (not from .template-page-content
-    // which has minHeight: canvasHeightPx set on it — reading scrollHeight from that
-    // element creates a circular dependency that prevents the page from collapsing).
-    // .tiptap only has min-height: A4_PAGE_HEIGHT_PX so it can shrink freely.
     const getTiptap = () =>
       canvasRef.current?.querySelector<HTMLElement>('.tiptap') ?? null
 
@@ -171,8 +174,8 @@ export const TemplateEditor = forwardRef<TemplateEditorHandle, TemplateEditorPro
 
     const measure = () => {
       const tiptap = getTiptap()
-      const measured = tiptap ? tiptap.scrollHeight : A4_PAGE_HEIGHT_PX
-      const nextHeight = Math.max(measured, A4_PAGE_HEIGHT_PX)
+      const measured = tiptap ? tiptap.scrollHeight : layout.heightPx
+      const nextHeight = Math.max(measured, layout.heightPx)
       setContentHeightPx((current) => (Math.abs(current - nextHeight) > 1 ? nextHeight : current))
     }
 
@@ -196,15 +199,27 @@ export const TemplateEditor = forwardRef<TemplateEditorHandle, TemplateEditorPro
       resizeObserver.disconnect()
       editor.off('update', scheduleMeasure)
     }
-  }, [editor])
+  }, [editor, layout.heightPx])
 
   if (!editor) return null
 
-  const canvasHeightPx = getA4CanvasHeightPx(contentHeightPx)
+  const canvasHeightPx = getCanvasHeightPx(contentHeightPx, layout)
 
   return (
     <div className="flex flex-col">
-      {editable && <TemplateToolbar editor={editor} defaultTextColor={defaultTextColor} />}
+      {editable && (
+        <TemplateToolbar
+          editor={editor}
+          defaultTextColor={defaultTextColor}
+          useOrganisationLogo={useOrganisationLogo}
+          useOrganisationLetterhead={useOrganisationLetterhead}
+          logoAvailable={logoAvailable}
+          letterheadAvailable={letterheadAvailable}
+          pageOrientation={pageOrientation}
+          onUseOrganisationLogoChange={onUseOrganisationLogoChange}
+          onUseOrganisationLetterheadChange={onUseOrganisationLetterheadChange}
+        />
+      )}
 
       <div
         className="rounded-b-lg border border-t-0 border-signara-steel/30 bg-[#dde1e6] py-6"
@@ -213,23 +228,29 @@ export const TemplateEditor = forwardRef<TemplateEditorHandle, TemplateEditorPro
         <div
           ref={canvasRef}
           className="relative mx-auto shadow-md"
-          style={{ width: A4_PAGE_WIDTH_PX, minHeight: canvasHeightPx }}
+          style={{ width: layout.widthPx, minHeight: canvasHeightPx }}
         >
           <TemplatePageBackgrounds
             letterheadUrl={letterheadUrl}
             contentHeightPx={contentHeightPx}
+            layout={layout}
           />
-          <TemplatePageLogos logoUrl={logoUrl} contentHeightPx={contentHeightPx} />
-          <TemplatePageGuide contentHeightPx={contentHeightPx} />
+          <TemplatePageLogos
+            logoUrl={logoUrl}
+            contentHeightPx={contentHeightPx}
+            layout={layout}
+          />
+          <TemplatePageGuide contentHeightPx={contentHeightPx} layout={layout} />
           <div
             className={`template-page-content relative z-[1] ${hasLetterhead ? 'bg-transparent' : ''}`}
             data-has-logo={hasLogo ? 'true' : 'false'}
+            data-page-orientation={pageOrientation}
             style={{ minHeight: canvasHeightPx }}
           >
             <EditorContent editor={editor} />
           </div>
         </div>
-        <TemplatePageCountBadge contentHeightPx={contentHeightPx} />
+        <TemplatePageCountBadge contentHeightPx={contentHeightPx} layout={layout} />
       </div>
 
       <style>{`
@@ -241,19 +262,19 @@ export const TemplateEditor = forwardRef<TemplateEditorHandle, TemplateEditorPro
               : `repeating-linear-gradient(
             to bottom,
             #ffffff 0px,
-            #ffffff ${A4_PAGE_HEIGHT_PX}px,
-            #dde1e6 ${A4_PAGE_HEIGHT_PX}px,
-            #dde1e6 ${A4_PAGE_HEIGHT_PX + A4_PAGE_GAP_PX}px
+            #ffffff ${layout.heightPx}px,
+            #dde1e6 ${layout.heightPx}px,
+            #dde1e6 ${layout.heightPx + layout.pageGapPx}px
           )`
           };
-          background-size: 100% ${A4_PAGE_HEIGHT_PX + A4_PAGE_GAP_PX}px;
+          background-size: 100% ${layout.heightPx + layout.pageGapPx}px;
         }
 
         .tiptap {
           position: relative;
           z-index: 1;
-          min-height: ${A4_PAGE_HEIGHT_PX}px;
-          padding: ${hasLogo ? ORG_LOGO_BLOCK_HEIGHT_PX : A4_PAGE_PADDING_Y_PX}px ${A4_PAGE_PADDING_X_PX}px ${A4_PAGE_PADDING_Y_PX}px;
+          min-height: ${layout.heightPx}px;
+          padding: ${hasLogo ? layout.logoBlockHeightPx : layout.paddingYPx}px ${layout.paddingXPx}px ${layout.paddingYPx}px;
           color: ${defaultTextColor};
           font-size: ${DEFAULT_TEMPLATE_FONT_SIZE_PT};
           background-color: transparent;

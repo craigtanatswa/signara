@@ -6,12 +6,21 @@ import {
   getCollapsedBlockGap,
   getPageTopInset,
 } from '@/lib/tiptap/page-layout'
+import { getPageLayout, type PageLayout } from '@/lib/tiptap/page-size'
+import type { PageOrientation } from '@/types/database'
 
 export interface PageFlowOptions {
   hasLogo: boolean
+  pageOrientation?: PageOrientation
 }
 
 const pageFlowPluginKey = new PluginKey<DecorationSet>('templatePageFlow')
+
+function readPageLayout(canvas: HTMLElement): PageLayout {
+  const orientation =
+    canvas.dataset.pageOrientation === 'landscape' ? 'landscape' : 'portrait'
+  return getPageLayout(orientation)
+}
 
 function buildPageFlowDecorations(view: EditorView): DecorationSet {
   const canvas = view.dom.closest('.template-page-content')
@@ -19,10 +28,11 @@ function buildPageFlowDecorations(view: EditorView): DecorationSet {
     return DecorationSet.empty
   }
 
+  const layout = readPageLayout(canvas)
   const hasLogo = canvas.dataset.hasLogo === 'true'
   const decorations: Decoration[] = []
   let spacerIndex = 0
-  let flowY = getPageTopInset(hasLogo)
+  let flowY = getPageTopInset(layout, hasLogo)
   let previousElement: HTMLElement | null = null
 
   for (let i = 0; i < view.dom.childElementCount; i++) {
@@ -45,13 +55,14 @@ function buildPageFlowDecorations(view: EditorView): DecorationSet {
     }
 
     const spacerHeight = calcRequiredSpacerHeight(
+      layout,
       flowY,
       blockHeight,
       hasLogo
     )
 
     if (spacerHeight > 0) {
-      const lineSpacer = findLineSpacer(view, pos, element, canvas, hasLogo)
+      const lineSpacer = findLineSpacer(view, pos, element, canvas, layout, hasLogo)
 
       if (lineSpacer) {
         decorations.push(
@@ -76,6 +87,7 @@ function findLineSpacer(
   nodePos: number,
   element: HTMLElement,
   canvas: HTMLElement,
+  layout: PageLayout,
   hasLogo: boolean
 ): { pos: number; height: number } | null {
   const node = view.state.doc.nodeAt(nodePos)
@@ -100,7 +112,7 @@ function findLineSpacer(
       const lineBottom = coords.bottom - canvasRect.top + canvas.scrollTop
       const lineHeight = Math.max(1, lineBottom - lineTop)
 
-      if (calcRequiredSpacerHeight(lineTop, lineHeight, hasLogo) > 0) {
+      if (calcRequiredSpacerHeight(layout, lineTop, lineHeight, hasLogo) > 0) {
         overflowPos = pos
         overflowCoords = coords
         break
@@ -128,7 +140,7 @@ function findLineSpacer(
   const lineTop = overflowCoords.top - canvasRect.top + canvas.scrollTop
   const lineBottom = overflowCoords.bottom - canvasRect.top + canvas.scrollTop
   const lineHeight = Math.max(1, lineBottom - lineTop)
-  const height = calcRequiredSpacerHeight(lineTop, lineHeight, hasLogo)
+  const height = calcRequiredSpacerHeight(layout, lineTop, lineHeight, hasLogo)
 
   if (height <= 0) return null
 
@@ -263,6 +275,7 @@ export const PageFlow = Extension.create<PageFlowOptions>({
   addOptions() {
     return {
       hasLogo: false,
+      pageOrientation: 'portrait' as PageOrientation,
     }
   },
 

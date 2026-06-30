@@ -2,6 +2,7 @@ import 'server-only'
 
 import { spawn } from 'node:child_process'
 import path from 'node:path'
+import type { PageOrientation } from '@/types/database'
 
 /** Render letterhead PDFs at print resolution (A4 ≈ 2480×3508 px). */
 export const LETTERHEAD_RENDER_DPI = 300
@@ -10,11 +11,17 @@ const WORKER_PATH = path.join(process.cwd(), 'lib/letterhead/convert-pdf-worker.
 const CONVERSION_TIMEOUT_MS = 60_000
 const MAX_OUTPUT_BYTES = 20 * 1024 * 1024
 
-export async function convertPdfFirstPageToPng(pdfBuffer: Buffer): Promise<Buffer> {
+export async function convertPdfFirstPageToPng(
+  pdfBuffer: Buffer,
+  orientation: PageOrientation = 'portrait'
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [WORKER_PATH], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: process.env,
+      env: {
+        ...process.env,
+        LETTERHEAD_ORIENTATION: orientation,
+      },
     })
 
     const stdoutChunks: Buffer[] = []

@@ -30,6 +30,8 @@ import {
   PenLine,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,11 +43,18 @@ import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { DEFAULT_TEMPLATE_TEXT_COLOR } from '@/lib/tiptap/field-utils'
 import { formatFontSizeLabel, TEMPLATE_FONT_SIZES_PT } from '@/lib/tiptap/font-size'
-import type { FieldType } from '@/types/database'
+import type { FieldType, PageOrientation } from '@/types/database'
 
 interface TemplateToolbarProps {
   editor: Editor
   defaultTextColor?: string
+  useOrganisationLogo?: boolean
+  useOrganisationLetterhead?: boolean
+  logoAvailable?: boolean
+  letterheadAvailable?: boolean
+  pageOrientation?: PageOrientation
+  onUseOrganisationLogoChange?: (checked: boolean) => void
+  onUseOrganisationLetterheadChange?: (checked: boolean) => void
 }
 
 interface ToolbarButtonProps {
@@ -100,6 +109,13 @@ const FONT_SIZES = TEMPLATE_FONT_SIZES_PT
 export function TemplateToolbar({
   editor,
   defaultTextColor = DEFAULT_TEMPLATE_TEXT_COLOR,
+  useOrganisationLogo = false,
+  useOrganisationLetterhead = false,
+  logoAvailable = false,
+  letterheadAvailable = false,
+  pageOrientation = 'portrait',
+  onUseOrganisationLogoChange,
+  onUseOrganisationLetterheadChange,
 }: TemplateToolbarProps) {
   const savedSelectionRef = useRef<{ from: number; to: number } | null>(null)
   const {
@@ -384,6 +400,56 @@ export function TemplateToolbar({
       >
         <Minus className="size-3.5" />
       </ToolbarButton>
+
+      <Separator orientation="vertical" className="mx-1 h-5" />
+
+      {/* Branding */}
+      <div
+        className="flex items-center gap-3"
+        onMouseDown={(event) => event.preventDefault()}
+      >
+        <div className="flex items-center gap-1.5">
+          <Switch
+            id="toolbar-use-logo"
+            checked={useOrganisationLogo && logoAvailable}
+            disabled={!logoAvailable || !onUseOrganisationLogoChange}
+            onCheckedChange={onUseOrganisationLogoChange}
+            className="scale-90"
+            aria-label="Include organisation logo"
+          />
+          <Label
+            htmlFor="toolbar-use-logo"
+            className="cursor-pointer text-xs font-medium text-signara-navy"
+            title={logoAvailable ? 'Include organisation logo' : 'Upload an organisation logo first'}
+          >
+            Logo
+          </Label>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <Switch
+            id="toolbar-use-letterhead"
+            checked={useOrganisationLetterhead && letterheadAvailable}
+            disabled={!letterheadAvailable || !onUseOrganisationLetterheadChange}
+            onCheckedChange={onUseOrganisationLetterheadChange}
+            className="scale-90"
+            aria-label="Include organisation letterhead"
+          />
+          <Label
+            htmlFor="toolbar-use-letterhead"
+            className="cursor-pointer text-xs font-medium text-signara-navy"
+            title={
+              letterheadAvailable
+                ? 'Include organisation letterhead'
+                : pageOrientation === 'landscape'
+                  ? 'Upload a landscape letterhead in Organisation settings first'
+                  : 'Upload an organisation letterhead first'
+            }
+          >
+            Letterhead
+          </Label>
+        </div>
+      </div>
 
       <Separator orientation="vertical" className="mx-1 h-5" />
 

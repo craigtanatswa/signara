@@ -15,7 +15,7 @@ export const LETTERHEAD_UPLOAD_TYPES = [
   'application/pdf',
 ] as const
 
-export type BrandingAssetKind = 'logo' | 'letterhead'
+export type BrandingAssetKind = 'logo' | 'letterhead' | 'letterhead-landscape'
 export type LetterheadUploadMime = (typeof LETTERHEAD_UPLOAD_TYPES)[number]
 
 export function getOrganisationAssetPath(

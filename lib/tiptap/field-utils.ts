@@ -1,4 +1,4 @@
-import type { FieldType, FormFieldAttrs, TiptapDocument, TiptapMark, TiptapNode } from '@/types/database'
+import type { FieldType, FormFieldAttrs, PageOrientation, TiptapDocument, TiptapMark, TiptapNode } from '@/types/database'
 import { normalizeFontSize } from '@/lib/tiptap/font-size'
 
 export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
@@ -58,6 +58,12 @@ export function getTemplateUsesOrganisationLetterhead(
   return content?.attrs?.useOrganisationLetterhead === true
 }
 
+export function getTemplatePageOrientation(
+  content: TiptapDocument | null | undefined
+): PageOrientation {
+  return content?.attrs?.pageOrientation === 'landscape' ? 'landscape' : 'portrait'
+}
+
 export function withTemplateTextColor(
   content: TiptapDocument | null,
   textColor: string
@@ -98,7 +104,12 @@ export function withTemplateBranding(
   {
     useOrganisationLogo,
     useOrganisationLetterhead,
-  }: { useOrganisationLogo: boolean; useOrganisationLetterhead: boolean }
+    pageOrientation,
+  }: {
+    useOrganisationLogo: boolean
+    useOrganisationLetterhead: boolean
+    pageOrientation?: PageOrientation
+  }
 ): TiptapDocument {
   return {
     ...(content ?? { type: 'doc' as const, content: [{ type: 'paragraph' }] }),
@@ -107,8 +118,20 @@ export function withTemplateBranding(
       textColor: getTemplateTextColor(content),
       useOrganisationLogo,
       useOrganisationLetterhead,
+      pageOrientation: pageOrientation ?? getTemplatePageOrientation(content),
     },
   }
+}
+
+export function withTemplatePageOrientation(
+  content: TiptapDocument | null,
+  pageOrientation: PageOrientation
+): TiptapDocument {
+  return withTemplateBranding(content, {
+    useOrganisationLogo: getTemplateUsesOrganisationLogo(content),
+    useOrganisationLetterhead: getTemplateUsesOrganisationLetterhead(content),
+    pageOrientation,
+  })
 }
 
 export function normalizeFormFieldAttrs(
@@ -222,6 +245,7 @@ export function normalizeTemplateContent(
       textColor: getTemplateTextColor(content),
       useOrganisationLogo: getTemplateUsesOrganisationLogo(content),
       useOrganisationLetterhead: getTemplateUsesOrganisationLetterhead(content),
+      pageOrientation: getTemplatePageOrientation(content),
     },
     content: normalizeNodeList(content.content),
   }

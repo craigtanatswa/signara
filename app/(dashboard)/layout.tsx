@@ -52,6 +52,7 @@ export default async function DashboardLayout({
     name: 'My Organisation',
     logo_url: null,
     letterhead_url: null,
+    letterhead_landscape_url: null,
     plan_id: null,
     trial_ends_at: null,
     created_at: '',

@@ -1,27 +1,26 @@
 'use client'
 
 import {
-  A4_PAGE_CYCLE_PX,
-  A4_PAGE_HEIGHT_PX,
-  ORG_LOGO_BLOCK_HEIGHT_PX,
-  ORG_LOGO_MAX_HEIGHT_PX,
-  ORG_LOGO_MAX_WIDTH_PX,
-  getA4PageCount,
-} from '@/lib/tiptap/a4-layout'
+  getPageCount,
+  getPageLayout,
+  type PageLayout,
+} from '@/lib/tiptap/page-size'
 import type { OrganisationBranding } from '@/types/database'
 
 interface TemplatePageBackgroundsProps {
   letterheadUrl: string | null
   contentHeightPx: number
+  layout: PageLayout
 }
 
 export function TemplatePageBackgrounds({
   letterheadUrl,
   contentHeightPx,
+  layout,
 }: TemplatePageBackgroundsProps) {
   if (!letterheadUrl) return null
 
-  const pageCount = getA4PageCount(contentHeightPx)
+  const pageCount = getPageCount(contentHeightPx, layout)
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-0" aria-hidden>
@@ -30,8 +29,8 @@ export function TemplatePageBackgrounds({
           key={index}
           className="absolute inset-x-0 overflow-hidden bg-white"
           style={{
-            top: index * A4_PAGE_CYCLE_PX,
-            height: A4_PAGE_HEIGHT_PX,
+            top: index * layout.pageCyclePx,
+            height: layout.heightPx,
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -49,12 +48,17 @@ export function TemplatePageBackgrounds({
 interface TemplatePageLogosProps {
   logoUrl: string | null
   contentHeightPx: number
+  layout: PageLayout
 }
 
-export function TemplatePageLogos({ logoUrl, contentHeightPx }: TemplatePageLogosProps) {
+export function TemplatePageLogos({
+  logoUrl,
+  contentHeightPx,
+  layout,
+}: TemplatePageLogosProps) {
   if (!logoUrl) return null
 
-  const pageCount = getA4PageCount(contentHeightPx)
+  const pageCount = getPageCount(contentHeightPx, layout)
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-[2]" aria-hidden>
@@ -63,8 +67,8 @@ export function TemplatePageLogos({ logoUrl, contentHeightPx }: TemplatePageLogo
           key={index}
           className="absolute inset-x-0 flex items-center justify-center border-b border-dashed border-signara-steel/25 px-6"
           style={{
-            top: index * A4_PAGE_CYCLE_PX,
-            height: ORG_LOGO_BLOCK_HEIGHT_PX,
+            top: index * layout.pageCyclePx,
+            height: layout.logoBlockHeightPx,
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -73,8 +77,8 @@ export function TemplatePageLogos({ logoUrl, contentHeightPx }: TemplatePageLogo
             alt="Organisation logo"
             className="object-contain"
             style={{
-              maxHeight: ORG_LOGO_MAX_HEIGHT_PX,
-              maxWidth: ORG_LOGO_MAX_WIDTH_PX,
+              maxHeight: layout.logoMaxHeightPx,
+              maxWidth: layout.logoMaxWidthPx,
             }}
           />
         </div>
@@ -86,11 +90,9 @@ export function TemplatePageLogos({ logoUrl, contentHeightPx }: TemplatePageLogo
 export function hasOrganisationBranding(
   branding: OrganisationBranding | null | undefined
 ): branding is OrganisationBranding {
-  return Boolean(branding?.logoUrl || branding?.letterheadUrl)
+  return Boolean(
+    branding?.logoUrl || branding?.letterheadUrl || branding?.letterheadLandscapeUrl
+  )
 }
 
-export {
-  ORG_LOGO_BLOCK_HEIGHT_PX,
-  ORG_LOGO_MAX_HEIGHT_PX,
-  ORG_LOGO_MAX_WIDTH_PX,
-}
+export { getPageLayout }

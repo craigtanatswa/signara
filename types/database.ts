@@ -12,15 +12,19 @@ export interface Organisation {
   name: string
   logo_url: string | null
   letterhead_url: string | null
+  letterhead_landscape_url: string | null
   plan_id: string | null
   trial_ends_at: string | null
   created_at: string
   updated_at: string
 }
 
+export type PageOrientation = 'portrait' | 'landscape'
+
 export interface OrganisationBranding {
   logoUrl: string | null
   letterheadUrl: string | null
+  letterheadLandscapeUrl: string | null
 }
 
 export interface User {
@@ -75,6 +79,7 @@ export interface TiptapDocument {
     textColor?: string
     useOrganisationLogo?: boolean
     useOrganisationLetterhead?: boolean
+    pageOrientation?: PageOrientation
   }
   content: TiptapNode[]
 }

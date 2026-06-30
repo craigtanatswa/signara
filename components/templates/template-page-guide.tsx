@@ -1,25 +1,28 @@
 'use client'
 
 import {
-  A4_PAGE_GAP_PX,
-  A4_PAGE_HEIGHT_PX,
-  getA4PageCount,
-} from '@/lib/tiptap/a4-layout'
+  formatPageOrientationLabel,
+  getPageCount,
+  getPageLayout,
+  type PageLayout,
+} from '@/lib/tiptap/page-size'
+import type { PageOrientation } from '@/types/database'
 
 interface TemplatePageGuideProps {
   contentHeightPx: number
+  layout: PageLayout
 }
 
-function getPageBreakTopPx(afterPageNumber: number): number {
+function getPageBreakTopPx(layout: PageLayout, afterPageNumber: number): number {
   return (
-    afterPageNumber * A4_PAGE_HEIGHT_PX +
-    (afterPageNumber - 1) * A4_PAGE_GAP_PX +
-    A4_PAGE_GAP_PX / 2
+    afterPageNumber * layout.heightPx +
+    (afterPageNumber - 1) * layout.pageGapPx +
+    layout.pageGapPx / 2
   )
 }
 
-export function TemplatePageGuide({ contentHeightPx }: TemplatePageGuideProps) {
-  const pageCount = getA4PageCount(contentHeightPx)
+export function TemplatePageGuide({ contentHeightPx, layout }: TemplatePageGuideProps) {
+  const pageCount = getPageCount(contentHeightPx, layout)
 
   if (pageCount <= 1) return null
 
@@ -27,7 +30,7 @@ export function TemplatePageGuide({ contentHeightPx }: TemplatePageGuideProps) {
     <div className="pointer-events-none absolute inset-x-0 top-0 z-[3]" aria-hidden>
       {Array.from({ length: pageCount - 1 }, (_, index) => {
         const afterPage = index + 1
-        const top = getPageBreakTopPx(afterPage)
+        const top = getPageBreakTopPx(layout, afterPage)
 
         return (
           <div
@@ -47,14 +50,18 @@ export function TemplatePageGuide({ contentHeightPx }: TemplatePageGuideProps) {
   )
 }
 
-export function TemplatePageCountBadge({ contentHeightPx }: TemplatePageGuideProps) {
-  const pageCount = getA4PageCount(contentHeightPx)
+export function TemplatePageCountBadge({
+  contentHeightPx,
+  layout,
+}: TemplatePageGuideProps) {
+  const pageCount = getPageCount(contentHeightPx, layout)
 
   return (
     <p className="mt-3 text-center text-xs font-medium text-signara-steel">
-      {pageCount} {pageCount === 1 ? 'page' : 'pages'} (A4 preview)
+      {pageCount} {pageCount === 1 ? 'page' : 'pages'} (A4 {formatPageOrientationLabel(layout.orientation).toLowerCase()} preview)
     </p>
   )
 }
 
-export { A4_PAGE_CYCLE_PX } from '@/lib/tiptap/a4-layout'
+export { getPageLayout }
+export type { PageOrientation }

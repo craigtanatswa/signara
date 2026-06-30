@@ -1,51 +1,47 @@
-/**
- * react-pdf often cannot render remote storage URLs (CORS). Fetch and convert to a
- * data URI so logos and letterheads appear reliably in PDFViewer.
- */
 const resolvedImageCache = new Map<string, string>()
 
-export async function resolvePdfImageSrc(url: string | null): Promise<string | null> {
+export async function resolvePdfImageSrc(url: string | null | undefined): Promise<string | null> {
   if (!url) return null
-  if (url.startsWith('data:')) return url
 
   const cached = resolvedImageCache.get(url)
   if (cached) return cached
 
   try {
-    const response = await fetch(url, { mode: 'cors', cache: 'no-store' })
-    if (!response.ok) {
-      return url
-    }
+    const response = await fetch(url)
+    if (!response.ok) return null
 
-    const blob = await response.blob()
-    const dataUri = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          resolve(reader.result)
-        } else {
-          reject(new Error('Failed to read image'))
-        }
-      }
-      reader.onerror = () => reject(reader.error)
-      reader.readAsDataURL(blob)
-    })
+    const buffer = Buffer.from(await response.arrayBuffer())
+    const contentType = response.headers.get('content-type') ?? 'image/png'
+    const dataUri = `data:${contentType};base64,${buffer.toString('base64')}`
     resolvedImageCache.set(url, dataUri)
     return dataUri
   } catch {
-    return url
+    return null
   }
 }
 
 export async function resolveOrganisationBrandingForPdf(
-  branding: { logoUrl: string | null; letterheadUrl: string | null } | null | undefined
-): Promise<{ logoUrl: string | null; letterheadUrl: string | null }> {
-  const source = branding ?? { logoUrl: null, letterheadUrl: null }
+  branding: {
+    logoUrl: string | null
+    letterheadUrl: string | null
+    letterheadLandscapeUrl?: string | null
+  } | null | undefined
+): Promise<{
+  logoUrl: string | null
+  letterheadUrl: string | null
+  letterheadLandscapeUrl: string | null
+}> {
+  const source = branding ?? {
+    logoUrl: null,
+    letterheadUrl: null,
+    letterheadLandscapeUrl: null,
+  }
 
-  const [logoUrl, letterheadUrl] = await Promise.all([
+  const [logoUrl, letterheadUrl, letterheadLandscapeUrl] = await Promise.all([
     resolvePdfImageSrc(source.logoUrl),
     resolvePdfImageSrc(source.letterheadUrl),
+    resolvePdfImageSrc(source.letterheadLandscapeUrl ?? null),
   ])
 
-  return { logoUrl, letterheadUrl }
+  return { logoUrl, letterheadUrl, letterheadLandscapeUrl }
 }

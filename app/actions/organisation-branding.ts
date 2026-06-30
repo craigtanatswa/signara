@@ -16,6 +16,7 @@ import {
   type BrandingAssetKind,
 } from '@/lib/storage/organisation-assets'
 import type { ActionResult } from '@/app/actions/profile'
+import type { PageOrientation } from '@/types/database'
 
 type BrandingUploadResult =
   | { success: true; url: string; message: string }
@@ -126,7 +127,12 @@ async function uploadBrandingAsset(
     `${path}?v=${Date.now()}`
   )
 
-  const column = kind === 'logo' ? 'logo_url' : 'letterhead_url'
+  const column =
+    kind === 'logo'
+      ? 'logo_url'
+      : kind === 'letterhead-landscape'
+        ? 'letterhead_landscape_url'
+        : 'letterhead_url'
   const { error: updateError } = await supabase
     .from('organisations')
     .update({ [column]: publicUrl })
@@ -147,7 +153,10 @@ async function uploadBrandingAsset(
   }
 }
 
-async function uploadLetterheadAsset(formData: FormData): Promise<BrandingUploadResult> {
+async function uploadLetterheadAsset(
+  formData: FormData,
+  orientation: PageOrientation = 'portrait'
+): Promise<BrandingUploadResult> {
   const auth = await getAdminOrganisationId()
   if ('error' in auth) {
     return { success: false, error: auth.error ?? 'Unauthorized' }
@@ -166,11 +175,17 @@ async function uploadLetterheadAsset(formData: FormData): Promise<BrandingUpload
   const { supabase, organisationId } = auth
   let uploadBuffer: Buffer
   let contentType: string
-  let message = 'Letterhead uploaded successfully.'
+  const isLandscape = orientation === 'landscape'
+  let message = isLandscape
+    ? 'Landscape letterhead uploaded successfully.'
+    : 'Letterhead uploaded successfully.'
 
   if (file.type === 'application/pdf') {
     try {
-      uploadBuffer = await convertPdfFirstPageToPng(Buffer.from(await file.arrayBuffer()))
+      uploadBuffer = await convertPdfFirstPageToPng(
+        Buffer.from(await file.arrayBuffer()),
+        orientation
+      )
     } catch (error) {
       console.error('Letterhead PDF conversion failed:', error)
       return {
@@ -180,7 +195,9 @@ async function uploadLetterheadAsset(formData: FormData): Promise<BrandingUpload
       }
     }
     contentType = 'image/png'
-    message = 'Letterhead uploaded and converted from PDF successfully.'
+    message = isLandscape
+      ? 'Landscape letterhead uploaded and converted from PDF successfully.'
+      : 'Letterhead uploaded and converted from PDF successfully.'
   } else {
     uploadBuffer = Buffer.from(await file.arrayBuffer())
     contentType = file.type
@@ -191,7 +208,8 @@ async function uploadLetterheadAsset(formData: FormData): Promise<BrandingUpload
     return { success: false, error: 'Unsupported file type.' }
   }
 
-  const path = getOrganisationAssetPath(organisationId, 'letterhead', extension)
+  const kind = isLandscape ? 'letterhead-landscape' : 'letterhead'
+  const path = getOrganisationAssetPath(organisationId, kind, extension)
 
   const { error: uploadError } = await supabase.storage
     .from(ORGANISATION_ASSETS_BUCKET)
@@ -212,7 +230,9 @@ async function uploadLetterheadAsset(formData: FormData): Promise<BrandingUpload
 
   const { error: updateError } = await supabase
     .from('organisations')
-    .update({ letterhead_url: publicUrl })
+    .update({
+      [isLandscape ? 'letterhead_landscape_url' : 'letterhead_url']: publicUrl,
+    })
     .eq('id', organisationId)
 
   if (updateError) {
@@ -239,7 +259,13 @@ export async function uploadOrganisationLogo(
 export async function uploadOrganisationLetterhead(
   formData: FormData
 ): Promise<BrandingUploadResult> {
-  return uploadLetterheadAsset(formData)
+  return uploadLetterheadAsset(formData, 'portrait')
+}
+
+export async function uploadOrganisationLandscapeLetterhead(
+  formData: FormData
+): Promise<BrandingUploadResult> {
+  return uploadLetterheadAsset(formData, 'landscape')
 }
 
 export async function removeOrganisationLogo(): Promise<ActionResult> {
@@ -288,19 +314,47 @@ export async function removeOrganisationLetterhead(): Promise<ActionResult> {
   return { success: true, message: 'Letterhead removed.' }
 }
 
+export async function removeOrganisationLandscapeLetterhead(): Promise<ActionResult> {
+  const auth = await getAdminOrganisationId()
+  if ('error' in auth) {
+    return { success: false, error: auth.error ?? 'Unauthorized' }
+  }
+
+  const { supabase, organisationId } = auth
+  const { error } = await supabase
+    .from('organisations')
+    .update({ letterhead_landscape_url: null })
+    .eq('id', organisationId)
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/dashboard/settings/organisation')
+  revalidatePath('/dashboard/templates/new')
+  revalidatePath('/dashboard/templates')
+
+  return { success: true, message: 'Landscape letterhead removed.' }
+}
+
 export async function getOrganisationBrandingForOrg(
   organisationId: string
-): Promise<{ logoUrl: string | null; letterheadUrl: string | null }> {
+): Promise<{
+  logoUrl: string | null
+  letterheadUrl: string | null
+  letterheadLandscapeUrl: string | null
+}> {
   const supabase = await createClient()
 
   const { data } = await supabase
     .from('organisations')
-    .select('logo_url, letterhead_url')
+    .select('logo_url, letterhead_url, letterhead_landscape_url')
     .eq('id', organisationId)
     .single()
 
   return {
     logoUrl: data?.logo_url ?? null,
     letterheadUrl: data?.letterhead_url ?? null,
+    letterheadLandscapeUrl: data?.letterhead_landscape_url ?? null,
   }
 }

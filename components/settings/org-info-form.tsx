@@ -7,8 +7,10 @@ import { z } from 'zod'
 import { Loader2 } from 'lucide-react'
 import { OrgBrandingUpload } from '@/components/settings/org-branding-upload'
 import {
+  removeOrganisationLandscapeLetterhead,
   removeOrganisationLetterhead,
   removeOrganisationLogo,
+  uploadOrganisationLandscapeLetterhead,
   uploadOrganisationLetterhead,
   uploadOrganisationLogo,
 } from '@/app/actions/organisation-branding'
@@ -122,15 +124,27 @@ export function OrgInfoForm({ organisation, plan }: OrgInfoFormProps) {
       />
 
       <OrgBrandingUpload
-        label="Letterhead background"
-        description="Optional. Full-page background on every template page. Upload PNG or PDF (Word: Save As PDF). PDFs are converted to high-resolution PNG automatically."
+        label="Letterhead background (portrait)"
+        description="Optional. Full-page background on portrait templates. Upload PNG or PDF (Word: Save As PDF). PDFs are converted to high-resolution PNG automatically."
         currentUrl={organisation.letterhead_url}
         accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
-        emptyHint="No letterhead uploaded — templates use a plain white page background."
-        previewAlt="Letterhead background preview"
+        emptyHint="No portrait letterhead uploaded — portrait templates use a plain white page background."
+        previewAlt="Portrait letterhead background preview"
         previewClassName="max-h-40 max-w-full object-contain"
         onUpload={uploadOrganisationLetterhead}
         onRemove={removeOrganisationLetterhead}
+      />
+
+      <OrgBrandingUpload
+        label="Letterhead background (landscape)"
+        description="Optional. Full-page background on landscape templates. Upload a landscape PNG or PDF exported from Word."
+        currentUrl={organisation.letterhead_landscape_url}
+        accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
+        emptyHint="No landscape letterhead uploaded — landscape templates use a plain white page background."
+        previewAlt="Landscape letterhead background preview"
+        previewClassName="max-h-40 max-w-full object-contain"
+        onUpload={uploadOrganisationLandscapeLetterhead}
+        onRemove={removeOrganisationLandscapeLetterhead}
       />
 
       {/* Plan info */}

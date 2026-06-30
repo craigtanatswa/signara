@@ -18,22 +18,22 @@ import {
   getTemplateTextColor,
   getTemplateUsesOrganisationLogo,
   getTemplateUsesOrganisationLetterhead,
+  getTemplatePageOrientation,
   normalizeFormFieldAttrs,
 } from '@/lib/tiptap/field-utils'
 import { normalizeFontSize } from '@/lib/tiptap/font-size'
 import { resolveOrganisationBrandingForPdf } from '@/lib/pdf/resolve-pdf-image'
-import { ORG_LOGO_BLOCK_HEIGHT_PX } from '@/lib/tiptap/a4-layout'
+import { getPageLayout, resolveLetterheadUrl, type PageLayout } from '@/lib/tiptap/page-size'
 
-const ORG_LOGO_BLOCK_PT = Math.round(ORG_LOGO_BLOCK_HEIGHT_PX * 0.75)
-const A4_WIDTH_PT = 595.28
-const A4_HEIGHT_PT = 841.89
+function createStyles(textColor: string, hasLogo: boolean, layout: PageLayout) {
+  const logoBlockPt = Math.round(layout.logoBlockHeightPx * 0.75)
+  const logoMaxWidthPt = Math.round(layout.logoMaxWidthPx * 0.75)
 
-function createStyles(textColor: string, hasLogo: boolean) {
   return StyleSheet.create({
     page: {
       fontFamily: 'Helvetica',
       fontSize: 11,
-      paddingTop: hasLogo ? ORG_LOGO_BLOCK_PT : 48,
+      paddingTop: hasLogo ? logoBlockPt : 48,
       paddingBottom: 48,
       paddingHorizontal: 56,
       color: textColor,
@@ -44,8 +44,8 @@ function createStyles(textColor: string, hasLogo: boolean) {
       position: 'absolute',
       top: 0,
       left: 0,
-      width: A4_WIDTH_PT,
-      height: A4_HEIGHT_PT,
+      width: layout.widthPt,
+      height: layout.heightPt,
       objectFit: 'contain',
       objectPosition: 'top',
     },
@@ -59,7 +59,7 @@ function createStyles(textColor: string, hasLogo: boolean) {
       justifyContent: 'center',
     },
     logoImage: {
-      width: 200,
+      width: logoMaxWidthPt,
       height: 60,
       objectFit: 'contain',
     },
@@ -304,7 +304,7 @@ function renderBlockContent(
       )
     }
 
-    return renderNode(node, `${keyPrefix}-block-${index}`, defaultColor, createStyles(defaultColor, false))
+    return renderNode(node, `${keyPrefix}-block-${index}`, defaultColor, createStyles(defaultColor, false, getPageLayout('portrait')))
   })
 }
 
@@ -444,17 +444,19 @@ function TemplatePdfDocument({
   textColor: string
   organisationBranding?: OrganisationBranding | null
 }) {
+  const pageOrientation = getTemplatePageOrientation(content)
+  const layout = getPageLayout(pageOrientation)
   const logoUrl = getTemplateUsesOrganisationLogo(content)
     ? organisationBranding?.logoUrl ?? null
     : null
   const letterheadUrl = getTemplateUsesOrganisationLetterhead(content)
-    ? organisationBranding?.letterheadUrl ?? null
+    ? resolveLetterheadUrl(organisationBranding, pageOrientation)
     : null
-  const styles = createStyles(textColor, Boolean(logoUrl))
+  const styles = createStyles(textColor, Boolean(logoUrl), layout)
 
   return (
     <Document title={name}>
-      <Page size="A4" style={styles.page}>
+      <Page size="A4" orientation={pageOrientation} style={styles.page}>
         {letterheadUrl ? (
           // eslint-disable-next-line jsx-a11y/alt-text -- decorative background layer in PDF output
           <Image fixed src={letterheadUrl} style={styles.letterheadBackground} />
