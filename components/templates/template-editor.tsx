@@ -318,7 +318,7 @@ export const TemplateEditor = forwardRef<TemplateEditorHandle, TemplateEditorPro
         .tiptap th {
           background-color: #f8f9fa;
           font-weight: 600;
-          color: #0f2c59;
+          color: var(--signara-brand);
         }
 
         .tiptap .selectedCell::after {

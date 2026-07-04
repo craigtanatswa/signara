@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/sidebar'
+import { DEFAULT_BRAND_THEME, isBrandTheme } from '@/lib/brand-themes'
 import type { User, Organisation } from '@/types/database'
 
 export default async function DashboardLayout({
@@ -47,20 +48,35 @@ export default async function DashboardLayout({
 
   const org = userProfile.organisations as Organisation | null
 
-  const organisation: Organisation = org ?? {
-    id: userProfile.organisation_id,
-    name: 'My Organisation',
-    logo_url: null,
-    letterhead_url: null,
-    letterhead_landscape_url: null,
-    plan_id: null,
-    trial_ends_at: null,
-    created_at: '',
-    updated_at: '',
-  }
+  const organisation: Organisation = org
+    ? {
+        ...org,
+        brand_theme: isBrandTheme(org.brand_theme ?? '')
+          ? org.brand_theme
+          : DEFAULT_BRAND_THEME,
+      }
+    : {
+        id: userProfile.organisation_id,
+        name: 'My Organisation',
+        logo_url: null,
+        letterhead_url: null,
+        letterhead_landscape_url: null,
+        brand_theme: DEFAULT_BRAND_THEME,
+        plan_id: null,
+        trial_ends_at: null,
+        created_at: '',
+        updated_at: '',
+      }
+
+  const brandTheme = isBrandTheme(organisation.brand_theme)
+    ? organisation.brand_theme
+    : DEFAULT_BRAND_THEME
 
   return (
-    <div className="flex h-screen overflow-hidden bg-signara-background">
+    <div
+      data-brand-theme={brandTheme}
+      className="flex h-screen overflow-hidden bg-signara-background"
+    >
       <Sidebar user={user} organisation={organisation} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <main className="flex flex-1 flex-col overflow-hidden">{children}</main>

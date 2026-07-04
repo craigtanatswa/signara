@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { isBrandTheme, type BrandTheme } from '@/lib/brand-themes'
 
 export type ActionResult =
   | { success: true; message: string }
@@ -73,6 +74,49 @@ export async function updateOrganisation(data: {
   }
 
   return { success: true, message: 'Organisation updated successfully' }
+}
+
+export async function updateBrandTheme(
+  brandTheme: BrandTheme
+): Promise<ActionResult> {
+  if (!isBrandTheme(brandTheme)) {
+    return { success: false, error: 'Invalid brand theme' }
+  }
+
+  const supabase = await createClient()
+
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser()
+
+  if (!authUser) {
+    redirect('/login')
+  }
+
+  const { data: userProfile, error: profileError } = await supabase
+    .from('users')
+    .select('organisation_id, role')
+    .eq('id', authUser.id)
+    .single()
+
+  if (profileError || !userProfile) {
+    return { success: false, error: 'User not found' }
+  }
+
+  if (userProfile.role !== 'admin') {
+    return { success: false, error: 'Admin access required' }
+  }
+
+  const { error } = await supabase
+    .from('organisations')
+    .update({ brand_theme: brandTheme })
+    .eq('id', userProfile.organisation_id)
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, message: 'Brand theme updated successfully' }
 }
 
 export async function updatePassword(password: string): Promise<ActionResult> {

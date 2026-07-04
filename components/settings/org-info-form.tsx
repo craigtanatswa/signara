@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2 } from 'lucide-react'
 import { OrgBrandingUpload } from '@/components/settings/org-branding-upload'
+import { BrandThemePicker } from '@/components/settings/brand-theme-picker'
 import {
   removeOrganisationLandscapeLetterhead,
   removeOrganisationLetterhead,
@@ -110,6 +111,8 @@ export function OrgInfoForm({ organisation, plan }: OrgInfoFormProps) {
           )}
         </Button>
       </form>
+
+      <BrandThemePicker currentTheme={organisation.brand_theme} />
 
       <OrgBrandingUpload
         label="Organisation logo"

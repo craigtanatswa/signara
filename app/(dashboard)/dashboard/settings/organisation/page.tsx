@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/header'
 import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
 import { BackLink } from '@/components/layout/back-link'
 import { OrgInfoForm } from '@/components/settings/org-info-form'
+import { DEFAULT_BRAND_THEME, isBrandTheme } from '@/lib/brand-themes'
 import type { User, Organisation, Plan } from '@/types/database'
 
 export default async function OrganisationSettingsPage() {
@@ -48,6 +49,9 @@ export default async function OrganisationSettingsPage() {
     logo_url: orgData.logo_url,
     letterhead_url: orgData.letterhead_url ?? null,
     letterhead_landscape_url: orgData.letterhead_landscape_url ?? null,
+    brand_theme: isBrandTheme(orgData.brand_theme ?? '')
+      ? orgData.brand_theme
+      : DEFAULT_BRAND_THEME,
     plan_id: orgData.plan_id,
     trial_ends_at: orgData.trial_ends_at,
     created_at: orgData.created_at,

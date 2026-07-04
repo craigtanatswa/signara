@@ -2,26 +2,44 @@
 
 @layer base {
   :root {
+    --signara-brand: #0f2c59;
+    --signara-brand-hsl: 216 71% 20%;
+
     --background: 210 20% 98%;
-    --foreground: 216 71% 20%;
+    --foreground: var(--signara-brand-hsl);
     --card: 0 0% 100%;
-    --card-foreground: 216 71% 20%;
+    --card-foreground: var(--signara-brand-hsl);
     --popover: 0 0% 100%;
-    --popover-foreground: 216 71% 20%;
-    --primary: 216 71% 20%;
+    --popover-foreground: var(--signara-brand-hsl);
+    --primary: var(--signara-brand-hsl);
     --primary-foreground: 210 20% 98%;
     --secondary: 129 4% 90%;
-    --secondary-foreground: 216 71% 20%;
+    --secondary-foreground: var(--signara-brand-hsl);
     --muted: 129 4% 90%;
     --muted-foreground: 215 15% 40%;
     --accent: 46 65% 57%;
-    --accent-foreground: 216 71% 20%;
+    --accent-foreground: var(--signara-brand-hsl);
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
     --border: 129 4% 65%;
     --input: 129 4% 65%;
-    --ring: 216 71% 20%;
+    --ring: var(--signara-brand-hsl);
     --radius: 0.5rem;
+  }
+
+  [data-brand-theme="green"] {
+    --signara-brand: #046307;
+    --signara-brand-hsl: 122 92% 20%;
+  }
+
+  [data-brand-theme="black"] {
+    --signara-brand: #000000;
+    --signara-brand-hsl: 0 0% 0%;
+  }
+
+  [data-brand-theme="maroon"] {
+    --signara-brand: #800000;
+    --signara-brand-hsl: 0 100% 25%;
   }
 }
 
@@ -45,7 +63,7 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
-  --color-signara-navy: #0f2c59;
+  --color-signara-navy: var(--signara-brand);
   --color-signara-gold: #dcba42;
   --color-signara-steel: #a1a8a2;
   --color-signara-background: #f8f9fa;

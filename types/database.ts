@@ -7,12 +7,15 @@ export interface Plan {
   created_at: string
 }
 
+import type { BrandTheme } from '@/lib/brand-themes'
+
 export interface Organisation {
   id: string
   name: string
   logo_url: string | null
   letterhead_url: string | null
   letterhead_landscape_url: string | null
+  brand_theme: BrandTheme
   plan_id: string | null
   trial_ends_at: string | null
   created_at: string

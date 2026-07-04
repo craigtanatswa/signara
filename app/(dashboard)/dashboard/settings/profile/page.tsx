@@ -5,6 +5,7 @@ import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
 import { BackLink } from '@/components/layout/back-link'
 import { ProfileInfoForm } from '@/components/settings/profile-info-form'
 import { ChangePasswordForm } from '@/components/settings/change-password-form'
+import { DEFAULT_BRAND_THEME } from '@/lib/brand-themes'
 import type { User, Organisation } from '@/types/database'
 
 export default async function ProfilePage() {
@@ -44,6 +45,7 @@ export default async function ProfilePage() {
     logo_url: null,
     letterhead_url: null,
     letterhead_landscape_url: null,
+    brand_theme: DEFAULT_BRAND_THEME,
     plan_id: null,
     trial_ends_at: null,
     created_at: '',
