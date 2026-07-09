@@ -8,6 +8,8 @@ export interface Plan {
 }
 
 import type { BrandTheme } from '@/lib/brand-themes'
+import type { Workflow } from '@/types/workflow'
+import type { JobLevel } from '@/types/org-structure'
 
 export interface Organisation {
   id: string
@@ -30,6 +32,16 @@ export interface OrganisationBranding {
   letterheadLandscapeUrl: string | null
 }
 
+export interface Department {
+  id: string
+  organisation_id: string
+  name: string
+  slug: string
+  is_executive: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface User {
   id: string
   email: string
@@ -37,10 +49,18 @@ export interface User {
   organisation_id: string
   role: 'admin' | 'member'
   avatar_url: string | null
+  /** @deprecated Legacy free-text department — prefer department_id */
   department: string | null
+  department_id: string | null
+  job_level: JobLevel
   must_change_password: boolean
   created_at: string
   updated_at: string
+}
+
+export type UserWithDepartment = User & {
+  departments?: Pick<Department, 'id' | 'name' | 'is_executive'> | null
+  overseen_departments?: Pick<Department, 'id' | 'name'>[]
 }
 
 // ─── Tiptap document types ───────────────────────────────────────────────────
@@ -54,6 +74,8 @@ export type FieldType =
   | 'file'
   | 'signature'
 
+export type SignatureRole = 'initiator' | 'approver'
+
 export interface FormFieldAttrs {
   fieldId: string
   fieldType: FieldType
@@ -61,6 +83,8 @@ export interface FormFieldAttrs {
   required: boolean
   options: string[]
   configured?: boolean
+  /** Only for signature fields — who fills this signature on a document instance. */
+  signatureRole?: SignatureRole
 }
 
 export interface TiptapMark {
@@ -89,25 +113,23 @@ export interface TiptapDocument {
 
 // ─── Template ────────────────────────────────────────────────────────────────
 
+/** Organisation templates are usable by any member; department templates only by that department. */
+export type TemplateScope = 'organisation' | 'department'
+
 export interface Template {
   id: string
   organisation_id: string
   name: string
   description: string | null
   content: TiptapDocument | null
-  workflow: WorkflowStep[]
+  workflow: Workflow
+  scope: TemplateScope
+  department_id: string | null
   created_by: string
   version: number
   is_active: boolean
   created_at: string
   updated_at: string
-}
-
-export interface WorkflowStep {
-  id: string
-  label: string
-  assignee_user_id: string | null
-  order: number
 }
 
 export interface Document {
@@ -128,9 +150,14 @@ export interface DocumentStep {
   document_id: string
   step_order: number
   assignee_user_id: string
-  status: 'pending' | 'approved' | 'rejected' | 'skipped'
+  /** 'waiting' = a prior step hasn't been approved yet; only one step is 'pending' at a time. */
+  status: 'waiting' | 'pending' | 'approved' | 'rejected' | 'skipped'
   signed_at: string | null
   signature_url: string | null
+  /** Signature field in the template content this step's sign-off is tied to, if any. */
+  signature_field_id: string | null
+  /** The template workflow step this was resolved from, for provenance. */
+  workflow_step_id: string | null
   notes: string | null
   created_at: string
   updated_at: string
