@@ -7,21 +7,22 @@ import { z } from 'zod'
 import { Loader2, Lock } from 'lucide-react'
 import { updateProfile } from '@/app/actions/profile'
 import { SuccessModal } from '@/components/ui/success-modal'
+import { ErrorMessage } from '@/components/ui/error-message'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import type { User, Organisation } from '@/types/database'
+import { JOB_LEVEL_LABELS } from '@/types/org-structure'
+import type { User, Organisation, UserWithDepartment } from '@/types/database'
 
 const profileSchema = z.object({
   full_name: z.string().min(2, { message: 'Name must be at least 2 characters' }),
-  department: z.string(),
 })
 
 type ProfileFormValues = z.infer<typeof profileSchema>
 
 interface ProfileInfoFormProps {
-  user: User
+  user: UserWithDepartment
   organisation: Organisation
 }
 
@@ -37,7 +38,6 @@ export function ProfileInfoForm({ user, organisation }: ProfileInfoFormProps) {
     resolver: zodResolver(profileSchema),
     defaultValues: {
       full_name: user.full_name,
-      department: user.department ?? '',
     },
   })
 
@@ -72,18 +72,28 @@ export function ProfileInfoForm({ user, organisation }: ProfileInfoFormProps) {
         )}
       </div>
 
-      {/* Department */}
-      <div className="space-y-1.5">
-        <Label htmlFor="department" className="text-signara-navy font-medium">
-          Department <span className="text-signara-steel font-normal">(optional)</span>
-        </Label>
-        <Input
-          id="department"
-          placeholder="e.g. Finance, HR, Operations"
-          {...register('department')}
-          className="border-signara-steel focus-visible:ring-signara-navy"
-        />
+      {/* Read-only: department & job level */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-signara-navy font-medium">Department</Label>
+          <div className="flex h-10 items-center">
+            <span className="text-sm text-signara-navy">
+              {user.departments?.name ?? user.department ?? '—'}
+            </span>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-signara-navy font-medium">Job level</Label>
+          <div className="flex h-10 items-center">
+            <Badge variant="outline" className="border-signara-navy/20 bg-signara-navy/5 text-signara-navy">
+              {JOB_LEVEL_LABELS[user.job_level] ?? 'Staff'}
+            </Badge>
+          </div>
+        </div>
       </div>
+      <p className="text-xs text-signara-steel">
+        Department and job level are managed by your organisation admin.
+      </p>
 
       {/* Read-only: email */}
       <div className="space-y-1.5">
@@ -102,7 +112,7 @@ export function ProfileInfoForm({ user, organisation }: ProfileInfoFormProps) {
       {/* Read-only: role + org */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label className="text-signara-navy font-medium">Role</Label>
+          <Label className="text-signara-navy font-medium">Signara access</Label>
           <div className="flex h-10 items-center">
             <Badge
               className={
@@ -124,11 +134,7 @@ export function ProfileInfoForm({ user, organisation }: ProfileInfoFormProps) {
         </div>
       </div>
 
-      {serverError && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3">
-          <p className="text-destructive text-sm">{serverError}</p>
-        </div>
-      )}
+      {serverError && <ErrorMessage>{serverError}</ErrorMessage>}
 
       <Button
         type="submit"

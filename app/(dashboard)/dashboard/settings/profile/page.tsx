@@ -6,7 +6,7 @@ import { BackLink } from '@/components/layout/back-link'
 import { ProfileInfoForm } from '@/components/settings/profile-info-form'
 import { ChangePasswordForm } from '@/components/settings/change-password-form'
 import { DEFAULT_BRAND_THEME } from '@/lib/brand-themes'
-import type { User, Organisation } from '@/types/database'
+import type { UserWithDepartment, Organisation } from '@/types/database'
 
 export default async function ProfilePage() {
   const supabase = await createClient()
@@ -19,26 +19,14 @@ export default async function ProfilePage() {
 
   const { data: userProfile } = await supabase
     .from('users')
-    .select('*, organisations(*)')
+    .select('*, organisations(*), departments(id, name, is_executive)')
     .eq('id', authUser.id)
     .single()
 
   if (!userProfile) redirect('/login')
 
-  const currentUser: User = {
-    id: userProfile.id,
-    email: userProfile.email,
-    full_name: userProfile.full_name,
-    organisation_id: userProfile.organisation_id,
-    role: userProfile.role,
-    avatar_url: userProfile.avatar_url,
-    department: userProfile.department,
-    must_change_password: userProfile.must_change_password,
-    created_at: userProfile.created_at,
-    updated_at: userProfile.updated_at,
-  }
-
-  const org = userProfile.organisations as Organisation | null
+  const currentUser = userProfile as UserWithDepartment & { organisations: Organisation | null }
+  const org = currentUser.organisations
   const organisation: Organisation = org ?? {
     id: userProfile.organisation_id,
     name: 'My Organisation',
