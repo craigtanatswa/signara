@@ -35,18 +35,39 @@ export function FieldConfigPopover({
 }: FieldConfigPopoverProps) {
   const [label, setLabel] = useState(attrs.label)
   const [required, setRequired] = useState(attrs.required)
+  const [signatureRole, setSignatureRole] = useState<'initiator' | 'approver'>(
+    attrs.signatureRole === 'initiator' ? 'initiator' : 'approver'
+  )
   const [options, setOptions] = useState<string[]>(attrs.options ?? [])
   const [labelError, setLabelError] = useState<string | null>(null)
   const labelInputRef = useRef<HTMLInputElement>(null)
 
+  const isSignatureField = attrs.fieldType === 'signature'
   const isConfigured = attrs.configured !== false
   const fieldTypeLabel = FIELD_TYPE_LABELS[attrs.fieldType as FieldType]
+
+  function buildFieldUpdate(
+    trimmedLabel: string,
+    extra: Partial<FormFieldAttrs> = {}
+  ): Partial<FormFieldAttrs> {
+    return {
+      label: trimmedLabel,
+      required: isSignatureField ? true : required,
+      options:
+        attrs.fieldType === 'dropdown'
+          ? options.map((option) => option.trim()).filter(Boolean)
+          : [],
+      configured: true,
+      ...extra,
+    }
+  }
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {
       const defaultLabel = getDefaultFieldLabel(attrs.fieldType)
       setLabel(attrs.label?.trim() || defaultLabel)
       setRequired(attrs.required)
+      setSignatureRole(attrs.signatureRole === 'initiator' ? 'initiator' : 'approver')
       setOptions(attrs.options ?? [])
       setLabelError(null)
       setTimeout(() => labelInputRef.current?.focus(), 0)
@@ -54,15 +75,12 @@ export function FieldConfigPopover({
       // Keep the field in the document with its current/default label when the
       // popover closes — only the Delete button removes a field.
       const trimmedLabel = label.trim() || getDefaultFieldLabel(attrs.fieldType)
-      onUpdate({
-        label: trimmedLabel,
-        required,
-        options:
-          attrs.fieldType === 'dropdown'
-            ? options.map((option) => option.trim()).filter(Boolean)
-            : [],
-        configured: true,
-      })
+      onUpdate(
+        buildFieldUpdate(
+          trimmedLabel,
+          isSignatureField ? { signatureRole } : {}
+        )
+      )
     }
 
     onOpenChange(nextOpen)
@@ -84,19 +102,14 @@ export function FieldConfigPopover({
         return
       }
 
-      onUpdate({
-        label: trimmedLabel,
-        required,
-        options: cleanedOptions,
-        configured: true,
-      })
+      onUpdate(buildFieldUpdate(trimmedLabel, { options: cleanedOptions }))
     } else {
-      onUpdate({
-        label: trimmedLabel,
-        required,
-        options: [],
-        configured: true,
-      })
+      onUpdate(
+        buildFieldUpdate(
+          trimmedLabel,
+          isSignatureField ? { signatureRole } : {}
+        )
+      )
     }
 
     setLabelError(null)
@@ -185,12 +198,43 @@ export function FieldConfigPopover({
             {labelError && <p className="text-xs text-red-600">{labelError}</p>}
           </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="field-required" className="text-xs font-medium text-signara-navy cursor-pointer">
-              Required
-            </Label>
-            <Switch id="field-required" checked={required} onCheckedChange={setRequired} />
-          </div>
+          {!isSignatureField && (
+            <div className="flex items-center justify-between">
+              <Label htmlFor="field-required" className="text-xs font-medium text-signara-navy cursor-pointer">
+                Required
+              </Label>
+              <Switch id="field-required" checked={required} onCheckedChange={setRequired} />
+            </div>
+          )}
+
+          {isSignatureField && (
+            <p className="text-xs text-signara-steel">
+              Signatures are always required when this document is filled in or approved.
+            </p>
+          )}
+
+          {isSignatureField && (
+            <>
+              <Separator />
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label htmlFor="initiator-signature" className="text-xs font-medium text-signara-navy cursor-pointer">
+                    Initiator signature
+                  </Label>
+                  <p className="mt-0.5 text-[11px] text-signara-steel">
+                    Filled by whoever starts the document, before approval begins.
+                  </p>
+                </div>
+                <Switch
+                  id="initiator-signature"
+                  checked={signatureRole === 'initiator'}
+                  onCheckedChange={(checked) =>
+                    setSignatureRole(checked ? 'initiator' : 'approver')
+                  }
+                />
+              </div>
+            </>
+          )}
 
           {attrs.fieldType === 'dropdown' && (
             <>

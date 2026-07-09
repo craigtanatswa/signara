@@ -23,6 +23,7 @@ import {
   resolveLetterheadUrl,
 } from '@/lib/tiptap/page-size'
 import { DEFAULT_TEMPLATE_FONT_SIZE_PT } from '@/lib/tiptap/font-size'
+import { cn } from '@/lib/utils'
 import { TemplateToolbar } from './template-toolbar'
 import {
   TemplatePageCountBadge,
@@ -54,6 +55,8 @@ interface TemplateEditorProps {
   onChange?: (content: TiptapDocument) => void
   onDirty?: () => void
   editable?: boolean
+  isMaximized?: boolean
+  onToggleMaximize?: () => void
 }
 
 export interface TemplateEditorHandle {
@@ -72,6 +75,8 @@ export const TemplateEditor = forwardRef<TemplateEditorHandle, TemplateEditorPro
   onChange,
   onDirty,
   editable = true,
+  isMaximized = false,
+  onToggleMaximize,
 }: TemplateEditorProps, ref) {
   const layout = useMemo(() => getPageLayout(pageOrientation), [pageOrientation])
   const logoUrl = useOrganisationLogo ? organisationBranding?.logoUrl ?? null : null
@@ -206,7 +211,7 @@ export const TemplateEditor = forwardRef<TemplateEditorHandle, TemplateEditorPro
   const canvasHeightPx = getCanvasHeightPx(contentHeightPx, layout)
 
   return (
-    <div className="flex flex-col">
+    <div className={cn('flex flex-col', isMaximized && 'min-h-0 flex-1')}>
       {editable && (
         <TemplateToolbar
           editor={editor}
@@ -218,11 +223,18 @@ export const TemplateEditor = forwardRef<TemplateEditorHandle, TemplateEditorPro
           pageOrientation={pageOrientation}
           onUseOrganisationLogoChange={onUseOrganisationLogoChange}
           onUseOrganisationLetterheadChange={onUseOrganisationLetterheadChange}
+          isMaximized={isMaximized}
+          onToggleMaximize={onToggleMaximize}
         />
       )}
 
       <div
-        className="rounded-b-lg border border-t-0 border-signara-steel/30 bg-[#dde1e6] py-6"
+        className={cn(
+          'border border-signara-steel/30 bg-[#dde1e6]',
+          isMaximized
+            ? 'flex min-h-0 flex-1 flex-col overflow-y-auto rounded-none border-x-0 border-b-0 border-t-0 py-4'
+            : 'rounded-b-lg border-t-0 py-6'
+        )}
         onClick={() => editor.commands.focus()}
       >
         <div

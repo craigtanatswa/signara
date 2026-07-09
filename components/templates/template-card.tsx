@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
-import { MoreHorizontal, Pencil, Copy, Archive, Trash2, CheckCircle2, Loader2 } from 'lucide-react'
+import { MoreHorizontal, Pencil, Copy, Archive, Trash2, CheckCircle2, Loader2, PlayCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -32,6 +32,7 @@ import type { Template } from '@/types/database'
 
 interface TemplateCardProps {
   template: Template
+  departmentName?: string
 }
 
 function TemplateUpdatedAt({ updatedAt }: { updatedAt: string }) {
@@ -42,7 +43,7 @@ function TemplateUpdatedAt({ updatedAt }: { updatedAt: string }) {
   )
 }
 
-export function TemplateCard({ template }: TemplateCardProps) {
+export function TemplateCard({ template, departmentName }: TemplateCardProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -88,6 +89,7 @@ export function TemplateCard({ template }: TemplateCardProps) {
   }
 
   const isLoading = isPending
+  const hasNoWorkflowSteps = (template.workflow?.steps?.length ?? 0) === 0
 
   return (
     <>
@@ -110,6 +112,22 @@ export function TemplateCard({ template }: TemplateCardProps) {
                   {template.description}
                 </p>
               )}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <Badge
+                  variant="outline"
+                  className="border-signara-navy/20 bg-signara-navy/5 text-xs text-signara-navy"
+                >
+                  {template.scope === 'department' ? (departmentName ?? 'Department') : 'Organisation'}
+                </Badge>
+                {hasNoWorkflowSteps && (
+                  <Badge
+                    variant="outline"
+                    className="border-amber-200 bg-amber-50 text-xs text-amber-700"
+                  >
+                    No approval chain set
+                  </Badge>
+                )}
+              </div>
             </div>
 
             <DropdownMenu>
@@ -163,7 +181,7 @@ export function TemplateCard({ template }: TemplateCardProps) {
           </div>
 
           {/* Footer */}
-          <div className="mt-4 flex items-center justify-between">
+          <div className="mt-4 flex items-center justify-between gap-2">
             <Badge
               variant="outline"
               className={
@@ -180,6 +198,15 @@ export function TemplateCard({ template }: TemplateCardProps) {
               <TemplateUpdatedAt updatedAt={template.updated_at} />
             </div>
           </div>
+
+          {template.is_active && !hasNoWorkflowSteps && (
+            <Button asChild variant="outline" className="mt-4 w-full border-signara-navy text-signara-navy">
+              <Link href={`/dashboard/templates/${template.id}/start`}>
+                <PlayCircle className="mr-2 size-4" />
+                Start document
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 

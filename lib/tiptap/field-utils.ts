@@ -1,4 +1,13 @@
-import type { FieldType, FormFieldAttrs, PageOrientation, TiptapDocument, TiptapMark, TiptapNode } from '@/types/database'
+import type { Editor } from '@tiptap/core'
+import type {
+  FieldType,
+  FormFieldAttrs,
+  PageOrientation,
+  SignatureRole,
+  TiptapDocument,
+  TiptapMark,
+  TiptapNode,
+} from '@/types/database'
 import { normalizeFontSize } from '@/lib/tiptap/font-size'
 
 export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
@@ -21,15 +30,28 @@ export function getDefaultFieldLabel(fieldType: FieldType): string {
   return FIELD_TYPE_LABELS[fieldType]
 }
 
+export function isSignatureRole(value: unknown): value is SignatureRole {
+  return value === 'initiator' || value === 'approver'
+}
+
 export function getFieldDisplayLabel(
-  attrs: Pick<FormFieldAttrs, 'label' | 'fieldType'>
+  attrs: Pick<FormFieldAttrs, 'label' | 'fieldType' | 'signatureRole'>
 ): string {
   const trimmed = attrs.label?.trim()
-  if (trimmed) return trimmed
-  if (isFieldType(attrs.fieldType)) {
-    return getDefaultFieldLabel(attrs.fieldType)
+  let base: string
+  if (trimmed) {
+    base = trimmed
+  } else if (isFieldType(attrs.fieldType)) {
+    base = getDefaultFieldLabel(attrs.fieldType)
+  } else {
+    base = 'Field'
   }
-  return 'Field'
+
+  if (attrs.fieldType === 'signature' && attrs.signatureRole === 'initiator') {
+    return `${base} (Initiator)`
+  }
+
+  return base
 }
 
 export function isFieldLabelValid(label: string): boolean {
@@ -140,17 +162,43 @@ export function normalizeFormFieldAttrs(
   const fieldType = isFieldType(attrs?.fieldType) ? attrs.fieldType : 'text'
   const rawLabel = typeof attrs?.label === 'string' ? attrs.label.trim() : ''
   const label = rawLabel || getDefaultFieldLabel(fieldType)
+  const signatureRole =
+    fieldType === 'signature' && isSignatureRole(attrs?.signatureRole)
+      ? attrs.signatureRole
+      : undefined
 
   return {
     fieldId: typeof attrs?.fieldId === 'string' ? attrs.fieldId : crypto.randomUUID(),
     fieldType,
     label,
-    required: Boolean(attrs?.required),
+    required: fieldType === 'signature' ? true : Boolean(attrs?.required),
     options: Array.isArray(attrs?.options)
       ? attrs.options.filter((o): o is string => typeof o === 'string')
       : [],
     configured: attrs?.configured !== false,
+    signatureRole,
   }
+}
+
+/** Infer signature roles for legacy templates: first signature → initiator, rest → approver. */
+export function assignDefaultSignatureRoles(fields: FormFieldAttrs[]): FormFieldAttrs[] {
+  let hasInitiator = fields.some(
+    (field) => field.fieldType === 'signature' && field.signatureRole === 'initiator'
+  )
+
+  return fields.map((field) => {
+    if (field.fieldType !== 'signature') return field
+    if (field.signatureRole) return field
+    if (!hasInitiator) {
+      hasInitiator = true
+      return { ...field, signatureRole: 'initiator' as const, required: true }
+    }
+    return { ...field, signatureRole: 'approver' as const, required: true }
+  })
+}
+
+export function listTemplateFieldsWithRoles(content: TiptapDocument | null): FormFieldAttrs[] {
+  return assignDefaultSignatureRoles(listTemplateFields(content))
 }
 
 function withoutLayoutAttrs(attrs: TiptapNode['attrs']): TiptapNode['attrs'] {
@@ -251,6 +299,27 @@ export function normalizeTemplateContent(
   }
 }
 
+export function listTemplateFields(content: TiptapDocument | null): FormFieldAttrs[] {
+  if (!content?.content?.length) return []
+
+  const fields: FormFieldAttrs[] = []
+
+  function walk(nodes: TiptapNode[]) {
+    for (const node of nodes) {
+      if (node.type === 'formField') {
+        fields.push(normalizeFormFieldAttrs(node.attrs))
+      }
+
+      if (node.content?.length) {
+        walk(node.content)
+      }
+    }
+  }
+
+  walk(content.content)
+  return fields
+}
+
 export function validateTemplateFields(content: TiptapDocument | null): string | null {
   if (!content?.content?.length) return null
 
@@ -282,4 +351,46 @@ export function validateTemplateFields(content: TiptapDocument | null): string |
   }
 
   return walk(content.content)
+}
+
+export function demoteOtherInitiatorSignatures(editor: Editor, keepFieldId: string) {
+  const { state } = editor
+  const tr = state.tr
+  let changed = false
+
+  state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'formField') return
+    const attrs = node.attrs as FormFieldAttrs
+    if (
+      attrs.fieldType === 'signature' &&
+      attrs.signatureRole === 'initiator' &&
+      attrs.fieldId !== keepFieldId
+    ) {
+      tr.setNodeMarkup(pos, undefined, { ...node.attrs, signatureRole: 'approver' })
+      changed = true
+    }
+  })
+
+  if (changed) {
+    editor.view.dispatch(tr)
+  }
+}
+
+export function validateSignatureFieldRoles(content: TiptapDocument | null): string | null {
+  const fields = listTemplateFieldsWithRoles(content)
+  const initiatorFields = fields.filter(
+    (field) => field.fieldType === 'signature' && field.signatureRole === 'initiator'
+  )
+
+  if (initiatorFields.length > 1) {
+    return 'Only one initiator signature field is allowed on a template.'
+  }
+
+  const signatureFields = fields.filter((field) => field.fieldType === 'signature')
+  const initiatorIndex = signatureFields.findIndex((field) => field.signatureRole === 'initiator')
+  if (initiatorIndex > 0) {
+    return 'The initiator signature must appear before approver signatures in the document.'
+  }
+
+  return null
 }

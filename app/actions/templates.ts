@@ -3,7 +3,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import type { TiptapDocument } from '@/types/database'
+import type { TemplateScope, TiptapDocument } from '@/types/database'
+import type { Workflow } from '@/types/workflow'
 
 async function getAuthenticatedAdmin() {
   const supabase = await createClient()
@@ -31,6 +32,13 @@ function validateTemplateName(name: string): string | null {
   return null
 }
 
+function validateTemplateScope(scope: TemplateScope, departmentId: string | null): string | null {
+  if (scope === 'department' && !departmentId) {
+    return 'Select a department for this template, or make it organisation-wide.'
+  }
+  return null
+}
+
 // ─── Create ──────────────────────────────────────────────────────────────────
 
 export async function createTemplate(data: {
@@ -38,11 +46,20 @@ export async function createTemplate(data: {
   description: string | null
   content: TiptapDocument | null
   is_active: boolean
+  scope?: TemplateScope
+  department_id?: string | null
 }) {
   const { supabase, profile } = await getAuthenticatedAdmin()
   const nameError = validateTemplateName(data.name)
   if (nameError) {
     return { error: nameError }
+  }
+
+  const scope: TemplateScope = data.scope ?? 'organisation'
+  const departmentId = scope === 'department' ? (data.department_id ?? null) : null
+  const scopeError = validateTemplateScope(scope, departmentId)
+  if (scopeError) {
+    return { error: scopeError }
   }
 
   const { data: template, error } = await supabase
@@ -52,7 +69,9 @@ export async function createTemplate(data: {
       name: data.name.trim(),
       description: data.description,
       content: data.content,
-      workflow: [],
+      workflow: { steps: [] } satisfies Workflow,
+      scope,
+      department_id: departmentId,
       created_by: profile.id,
       version: 1,
       is_active: data.is_active,
@@ -77,12 +96,21 @@ export async function updateTemplate(
     description: string | null
     content: TiptapDocument | null
     is_active: boolean
+    scope?: TemplateScope
+    department_id?: string | null
   }
 ) {
   const { supabase, profile } = await getAuthenticatedAdmin()
   const nameError = validateTemplateName(data.name)
   if (nameError) {
     return { error: nameError }
+  }
+
+  const scope: TemplateScope = data.scope ?? 'organisation'
+  const departmentId = scope === 'department' ? (data.department_id ?? null) : null
+  const scopeError = validateTemplateScope(scope, departmentId)
+  if (scopeError) {
+    return { error: scopeError }
   }
 
   // Fetch current version to increment it
@@ -104,6 +132,8 @@ export async function updateTemplate(
       description: data.description,
       content: data.content,
       is_active: data.is_active,
+      scope,
+      department_id: departmentId,
       version: (existing.version ?? 1) + 1,
       updated_at: new Date().toISOString(),
     })
@@ -160,7 +190,9 @@ export async function duplicateTemplate(id: string) {
       name: `${source.name} (copy)`,
       description: source.description,
       content: source.content,
-      workflow: source.workflow ?? [],
+      workflow: source.workflow ?? ({ steps: [] } satisfies Workflow),
+      scope: source.scope ?? 'organisation',
+      department_id: source.department_id ?? null,
       created_by: profile.id,
       version: 1,
       is_active: false,
@@ -192,5 +224,36 @@ export async function toggleTemplateActive(id: string, is_active: boolean) {
   }
 
   revalidatePath('/dashboard/templates')
+  return { success: true }
+}
+
+// ─── Workflow ────────────────────────────────────────────────────────────────
+
+export async function updateTemplateWorkflow(id: string, workflow: Workflow) {
+  const { supabase, profile } = await getAuthenticatedAdmin()
+
+  const { data: existing } = await supabase
+    .from('templates')
+    .select('id')
+    .eq('id', id)
+    .eq('organisation_id', profile.organisation_id)
+    .maybeSingle()
+
+  if (!existing) {
+    return { error: 'Template not found' }
+  }
+
+  const { error } = await supabase
+    .from('templates')
+    .update({ workflow, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('organisation_id', profile.organisation_id)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath('/dashboard/templates')
+  revalidatePath(`/dashboard/templates/${id}/workflow`)
   return { success: true }
 }

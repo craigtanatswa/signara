@@ -28,6 +28,8 @@ import {
   ToggleLeft,
   Paperclip,
   PenLine,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -55,6 +57,8 @@ interface TemplateToolbarProps {
   pageOrientation?: PageOrientation
   onUseOrganisationLogoChange?: (checked: boolean) => void
   onUseOrganisationLetterheadChange?: (checked: boolean) => void
+  isMaximized?: boolean
+  onToggleMaximize?: () => void
 }
 
 interface ToolbarButtonProps {
@@ -116,6 +120,8 @@ export function TemplateToolbar({
   pageOrientation = 'portrait',
   onUseOrganisationLogoChange,
   onUseOrganisationLetterheadChange,
+  isMaximized = false,
+  onToggleMaximize,
 }: TemplateToolbarProps) {
   const savedSelectionRef = useRef<{ from: number; to: number } | null>(null)
   const {
@@ -197,7 +203,15 @@ export function TemplateToolbar({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 rounded-t-lg border border-signara-steel/30 bg-signara-background px-2 py-1.5">
+    <div
+      className={cn(
+        'border border-signara-steel/30 bg-signara-background',
+        isMaximized
+          ? 'sticky top-0 z-10 shrink-0 rounded-none border-x-0 border-t-0 shadow-sm'
+          : 'rounded-t-lg'
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5">
       {/* Text formatting */}
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBold().run()}
@@ -484,6 +498,32 @@ export function TemplateToolbar({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
+      </div>
+
+      {onToggleMaximize && (
+        <div className="flex items-center justify-end border-t border-signara-steel/20 px-2 py-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onToggleMaximize}
+            className="h-8 gap-1.5 rounded-md border border-signara-steel/40 px-2.5 text-xs font-medium text-signara-navy hover:bg-signara-navy/10"
+            title={isMaximized ? 'Exit full screen (Esc)' : 'Maximise editor'}
+          >
+            {isMaximized ? (
+              <>
+                <Minimize2 className="size-3.5" />
+                Exit full screen
+              </>
+            ) : (
+              <>
+                <Maximize2 className="size-3.5" />
+                Maximise
+              </>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

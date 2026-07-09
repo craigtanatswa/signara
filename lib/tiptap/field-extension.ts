@@ -2,12 +2,14 @@ import { Node, mergeAttributes } from '@tiptap/core'
 import { ReactNodeViewRenderer } from '@tiptap/react'
 import { NodeSelection } from '@tiptap/pm/state'
 import { FormFieldNodeView } from '@/components/templates/form-field-node-view'
+import type { Editor } from '@tiptap/core'
 import {
   getDefaultFieldLabel,
   isFieldType,
+  isSignatureRole,
   normalizeFormFieldAttrs,
 } from '@/lib/tiptap/field-utils'
-import type { FieldType, FormFieldAttrs } from '@/types/database'
+import type { FieldType, FormFieldAttrs, SignatureRole } from '@/types/database'
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -89,6 +91,15 @@ export const FormFieldExtension = Node.create({
           'data-configured': String(attrs.configured !== false),
         }),
       },
+      signatureRole: {
+        default: null as SignatureRole | null,
+        parseHTML: (element) => {
+          const value = element.getAttribute('data-signature-role')
+          return isSignatureRole(value) ? value : null
+        },
+        renderHTML: (attrs) =>
+          attrs.signatureRole ? { 'data-signature-role': attrs.signatureRole } : {},
+      },
     }
   },
 
@@ -113,14 +124,27 @@ export const FormFieldExtension = Node.create({
 
           const fieldType = parseFieldType(attrs.fieldType)
           const fieldId = crypto.randomUUID()
+
+          let defaultSignatureRole: SignatureRole | undefined
+          if (fieldType === 'signature') {
+            let signatureCount = 0
+            state.doc.descendants((node) => {
+              if (node.type.name === 'formField' && node.attrs.fieldType === 'signature') {
+                signatureCount += 1
+              }
+            })
+            defaultSignatureRole = signatureCount === 0 ? 'initiator' : 'approver'
+          }
+
           const normalized = {
             ...normalizeFormFieldAttrs({
               fieldId,
               fieldType,
               label: getDefaultFieldLabel(fieldType),
-              required: false,
+              required: fieldType === 'signature',
               options: [],
               configured: false,
+              signatureRole: defaultSignatureRole,
             }),
             configured: false,
           }

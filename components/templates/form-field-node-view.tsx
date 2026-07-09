@@ -4,7 +4,7 @@ import { NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FieldConfigPopover } from './field-config-popover'
-import { getFieldDisplayLabel } from '@/lib/tiptap/field-utils'
+import { getFieldDisplayLabel, demoteOtherInitiatorSignatures } from '@/lib/tiptap/field-utils'
 import type { FieldType, FormFieldAttrs } from '@/types/database'
 
 const FIELD_ICONS: Record<FieldType, string> = {
@@ -17,7 +17,7 @@ const FIELD_ICONS: Record<FieldType, string> = {
   signature: '✍️',
 }
 
-export function FormFieldNodeView({ node, updateAttributes, deleteNode, selected }: NodeViewProps) {
+export function FormFieldNodeView({ node, updateAttributes, deleteNode, selected, editor }: NodeViewProps) {
   const [popoverOpen, setPopoverOpen] = useState(false)
   const fieldRef = useRef<HTMLSpanElement>(null)
   const attrs = node.attrs as FormFieldAttrs
@@ -73,6 +73,13 @@ export function FormFieldNodeView({ node, updateAttributes, deleteNode, selected
   }, [popoverOpen, scrollFieldIntoView])
 
   function handleUpdate(updated: Partial<FormFieldAttrs>) {
+    if (
+      updated.signatureRole === 'initiator' &&
+      attrs.fieldType === 'signature' &&
+      editor
+    ) {
+      demoteOtherInitiatorSignatures(editor, attrs.fieldId)
+    }
     updateAttributes(updated)
     scrollFieldIntoView()
   }

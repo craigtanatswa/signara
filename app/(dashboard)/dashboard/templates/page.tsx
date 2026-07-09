@@ -26,13 +26,17 @@ export default async function TemplatesPage() {
 
   const user = profile as User
 
-  const { data: templates } = await supabase
-    .from('templates')
-    .select('*')
-    .eq('organisation_id', user.organisation_id)
-    .order('updated_at', { ascending: false })
+  const [{ data: templates }, { data: departments }] = await Promise.all([
+    supabase
+      .from('templates')
+      .select('*')
+      .eq('organisation_id', user.organisation_id)
+      .order('updated_at', { ascending: false }),
+    supabase.from('departments').select('id, name').eq('organisation_id', user.organisation_id),
+  ])
 
   const items = (templates ?? []) as Template[]
+  const departmentNameById = new Map((departments ?? []).map((d) => [d.id, d.name]))
 
   return (
     <>
@@ -79,7 +83,13 @@ export default async function TemplatesPage() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {items.map((template) => (
-                <TemplateCard key={template.id} template={template} />
+                <TemplateCard
+                  key={template.id}
+                  template={template}
+                  departmentName={
+                    template.department_id ? departmentNameById.get(template.department_id) : undefined
+                  }
+                />
               ))}
             </div>
           )}
