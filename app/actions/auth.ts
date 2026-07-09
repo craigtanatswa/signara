@@ -71,13 +71,33 @@ export async function registerOrganisation(formData: {
     return { success: false, error: orgError?.message ?? 'Failed to create organisation' }
   }
 
-  // 3. Insert user profile
+  // 2b. Create Executive department
+  const { data: executiveDept, error: deptError } = await adminSupabase
+    .from('departments')
+    .insert({
+      organisation_id: orgData.id,
+      name: 'Executive',
+      slug: 'executive',
+      is_executive: true,
+    })
+    .select('id')
+    .single()
+
+  if (deptError || !executiveDept) {
+    await adminSupabase.auth.admin.deleteUser(authUser.id)
+    return { success: false, error: deptError?.message ?? 'Failed to create Executive department' }
+  }
+
+  // 3. Insert user profile as org admin + Managing Director
   const { error: userError } = await adminSupabase.from('users').insert({
     id: authUser.id,
     email,
     full_name: fullName,
     organisation_id: orgData.id,
     role: 'admin',
+    department_id: executiveDept.id,
+    job_level: 'managing_director',
+    department: 'Executive',
     must_change_password: false,
   })
 

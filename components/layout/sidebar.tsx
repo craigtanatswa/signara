@@ -65,7 +65,7 @@ export function Sidebar({ user, organisation }: SidebarProps) {
     .slice(0, 2)
 
   return (
-    <aside className="flex h-screen w-60 flex-col bg-signara-navy">
+    <aside className="flex h-full min-h-0 w-60 flex-col bg-signara-navy">
       {/* Logo — cropped asset, 4/5 of section width */}
       <div className="flex h-16 shrink-0 items-center justify-center border-b border-r border-border bg-signara-offwhite">
         <Image

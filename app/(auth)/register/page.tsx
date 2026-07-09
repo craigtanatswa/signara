@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { Loader2 } from 'lucide-react'
 import { registerOrganisation } from '@/app/actions/auth'
 import { Button } from '@/components/ui/button'
+import { ErrorMessage } from '@/components/ui/error-message'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -170,11 +171,7 @@ export default function RegisterPage() {
           )}
         </div>
 
-        {serverError && (
-          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3">
-            <p className="text-destructive text-sm">{serverError}</p>
-          </div>
-        )}
+        {serverError && <ErrorMessage>{serverError}</ErrorMessage>}
 
         <Button
           type="submit"

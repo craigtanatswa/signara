@@ -3,5 +3,5 @@ export function DashboardPageBody({
 }: {
   children: React.ReactNode
 }) {
-  return <div className="flex-1 overflow-y-auto p-6">{children}</div>
+  return <div className="min-h-0 flex-1 overflow-y-auto p-6">{children}</div>
 }

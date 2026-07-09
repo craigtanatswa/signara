@@ -17,6 +17,7 @@ import {
 } from '@/app/actions/organisation-branding'
 import { updateOrganisation } from '@/app/actions/profile'
 import { SuccessModal } from '@/components/ui/success-modal'
+import { ErrorMessage } from '@/components/ui/error-message'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -90,11 +91,7 @@ export function OrgInfoForm({ organisation, plan }: OrgInfoFormProps) {
           )}
         </div>
 
-        {serverError && (
-          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3">
-            <p className="text-destructive text-sm">{serverError}</p>
-          </div>
-        )}
+        {serverError && <ErrorMessage>{serverError}</ErrorMessage>}
 
         <Button
           type="submit"

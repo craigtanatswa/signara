@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Check, Loader2 } from 'lucide-react'
 import { updateBrandTheme } from '@/app/actions/profile'
 import { BRAND_THEME_IDS, BRAND_THEMES, type BrandTheme } from '@/lib/brand-themes'
+import { ErrorMessage } from '@/components/ui/error-message'
 import { cn } from '@/lib/utils'
 
 interface BrandThemePickerProps {
@@ -99,9 +100,7 @@ export function BrandThemePicker({ currentTheme }: BrandThemePickerProps) {
         })}
       </div>
 
-      {error && (
-        <p className="text-destructive text-sm">{error}</p>
-      )}
+      {error && <ErrorMessage>{error}</ErrorMessage>}
     </div>
   )
 }

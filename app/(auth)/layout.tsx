@@ -7,7 +7,7 @@ export default function AuthLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-0 flex-1 overflow-y-auto">
       {/* Left panel — rotating promo copy */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-signara-navy p-12">
         <AuthPromoRotator className="flex flex-1 flex-col justify-center" />

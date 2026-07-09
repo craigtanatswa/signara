@@ -41,6 +41,8 @@ export default async function DashboardLayout({
     role: userProfile.role,
     avatar_url: userProfile.avatar_url,
     department: userProfile.department,
+    department_id: userProfile.department_id,
+    job_level: userProfile.job_level,
     must_change_password: userProfile.must_change_password,
     created_at: userProfile.created_at,
     updated_at: userProfile.updated_at,
@@ -75,11 +77,11 @@ export default async function DashboardLayout({
   return (
     <div
       data-brand-theme={brandTheme}
-      className="flex h-screen overflow-hidden bg-signara-background"
+      className="flex min-h-0 flex-1 overflow-hidden bg-signara-background"
     >
       <Sidebar user={user} organisation={organisation} />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <main className="flex flex-1 flex-col overflow-hidden">{children}</main>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
       </div>
     </div>
   )

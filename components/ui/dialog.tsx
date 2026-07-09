@@ -55,15 +55,43 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  function preventDismissDuringNestedOrScrollInteraction(
+    event: CustomEvent<{ originalEvent: PointerEvent | FocusEvent | Event }>
+  ) {
+    // Select menus render in a portal outside the dialog DOM tree
+    if (document.querySelector('[data-slot="select-content"][data-state="open"]')) {
+      event.preventDefault()
+      return
+    }
+
+    const original = event.detail.originalEvent
+    if (original instanceof WheelEvent) {
+      event.preventDefault()
+      return
+    }
+
+    const target = event.target as Element | null
+    if (
+      target?.closest('[data-slot="select-content"]') ||
+      target?.closest('[data-slot="dropdown-menu-content"]') ||
+      target?.closest('[data-slot="popover-content"]')
+    ) {
+      event.preventDefault()
+    }
+  }
+
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
+          "fixed top-[50%] left-[50%] z-50 grid w-full max-h-[calc(100dvh-2rem)] max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overscroll-y-contain rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
           className
         )}
+        onPointerDownOutside={preventDismissDuringNestedOrScrollInteraction}
+        onInteractOutside={preventDismissDuringNestedOrScrollInteraction}
+        onFocusOutside={preventDismissDuringNestedOrScrollInteraction}
         {...props}
       >
         {children}

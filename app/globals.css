@@ -85,3 +85,10 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Opaque error toasts — avoid transparent Sonner defaults over page content */
+[data-sonner-toast][data-type='error'] {
+  background-color: #fef2f2 !important;
+  border-color: #fecaca !important;
+  color: #7f1d1d !important;
+}

@@ -10,7 +10,6 @@ export type ActionResult =
 
 export async function updateProfile(data: {
   full_name: string
-  department: string
 }): Promise<ActionResult> {
   const supabase = await createClient()
 
@@ -26,7 +25,6 @@ export async function updateProfile(data: {
     .from('users')
     .update({
       full_name: data.full_name.trim(),
-      department: data.department.trim() || null,
     })
     .eq('id', authUser.id)
 
