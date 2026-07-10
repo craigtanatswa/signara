@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Loader2, PlayCircle, Save, XCircle } from 'lucide-react'
+import { Loader2, PlayCircle, XCircle } from 'lucide-react'
 import {
   cancelDocument,
   saveInitiatorSignature,
@@ -12,6 +12,7 @@ import {
 import { SignaturePad } from '@/components/documents/signature-pad'
 import { Button } from '@/components/ui/button'
 import { ErrorMessage } from '@/components/ui/error-message'
+import type { SignatureCaptureMethod } from '@/types/database'
 
 interface InitiatorDocumentPanelProps {
   documentId: string
@@ -39,20 +40,16 @@ export function InitiatorDocumentPanel({
     setSignatureDataUrl(existingSignature)
   }, [existingSignature])
 
-  function handleSaveSignature() {
+  async function handleSaveToDocument(dataUrl: string, _method: SignatureCaptureMethod) {
     setError(null)
-    startTransition(async () => {
-      const result = await saveInitiatorSignature({
-        documentId,
-        signatureDataUrl,
-      })
-      if (result.error) {
-        setError(result.error)
-        return
-      }
-      toast.success('Signature saved')
-      router.refresh()
+    const result = await saveInitiatorSignature({
+      documentId,
+      signatureDataUrl: dataUrl,
     })
+    if (result.error) {
+      throw new Error(result.error)
+    }
+    router.refresh()
   }
 
   function handleSubmit() {
@@ -142,7 +139,7 @@ export function InitiatorDocumentPanel({
         {requiresInitiatorSignature
           ? hasSavedSignature
             ? 'Your initiator signature is ready. Submit for approval, or clear and re-sign if needed.'
-            : 'Sign below, then submit for approval. You can update your signature while this document is still a draft.'
+            : 'Sign below, then submit for approval. Your signature is saved for this document and for future use.'
           : 'Review your document, then submit for approval. You can cancel while this document is still a draft.'}
       </p>
 
@@ -152,31 +149,16 @@ export function InitiatorDocumentPanel({
             label={initiatorFieldLabel}
             value={signatureDataUrl}
             onChange={setSignatureDataUrl}
+            onSave={handleSaveToDocument}
           />
-          {(!hasSavedSignature || hasUnsavedSignature) && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isPending || !signatureDataUrl}
-              onClick={handleSaveSignature}
-              className="border-signara-navy text-signara-navy hover:bg-signara-navy hover:text-white"
-            >
-              {isPending ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
-              ) : (
-                <Save className="mr-1.5 size-4" />
-              )}
-              Save signature
-            </Button>
-          )}
           {hasSavedSignature && !hasUnsavedSignature && (
             <p className="text-xs text-signara-steel">
-              Signature captured during fill details. Clear it above if you need to re-sign.
+              Signature is saved on this document. Clear above if you need to re-sign.
             </p>
           )}
           {hasUnsavedSignature && (
             <p className="text-xs text-amber-700">
-              You have an unsaved signature — click Save signature, or Submit will save it for you.
+              Click Save to store this signature on the document, or Submit will save it for you.
             </p>
           )}
         </div>

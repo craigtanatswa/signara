@@ -174,6 +174,23 @@ export interface Notification {
   created_at: string
 }
 
+// ─── Saved signatures ────────────────────────────────────────────────────────
+
+export type SignatureCaptureMethod = 'draw' | 'type' | 'upload'
+
+/** A reusable signature belonging to a user (draw, typed, or uploaded). */
+export interface UserSignature {
+  id: string
+  user_id: string
+  label: string
+  method: SignatureCaptureMethod
+  /** PNG data URL (`data:image/png;base64,...`). */
+  image_data: string
+  is_default: boolean
+  created_at: string
+  updated_at: string
+}
+
 // ─── Template requests ───────────────────────────────────────────────────────
 
 export type TemplateRequestStatus = 'pending' | 'fulfilled' | 'dismissed'

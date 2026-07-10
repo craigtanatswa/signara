@@ -1,9 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { FileText } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import { BulkApprovalBar } from '@/components/documents/bulk-approval-bar'
 import type { Document } from '@/types/database'
 
 export interface DocumentRow {
@@ -16,9 +19,15 @@ export interface DocumentRow {
   stepProgress: { current: number; total: number } | null
 }
 
+/** Document awaiting the current user's action, with step metadata for bulk approve. */
+export interface AwaitingDocumentRow extends DocumentRow {
+  stepId: string
+  requiresSignature: boolean
+}
+
 interface DocumentsTabsProps {
   myDocuments: DocumentRow[]
-  awaitingMyAction: DocumentRow[]
+  awaitingMyAction: AwaitingDocumentRow[]
   allDocuments: DocumentRow[] | null
 }
 
@@ -110,7 +119,118 @@ function DocumentsTable({ rows, emptyMessage }: { rows: DocumentRow[]; emptyMess
   )
 }
 
+function AwaitingDocumentsTable({
+  rows,
+  selectedIds,
+  onToggle,
+  onToggleAll,
+}: {
+  rows: AwaitingDocumentRow[]
+  selectedIds: Set<string>
+  onToggle: (id: string) => void
+  onToggleAll: (checked: boolean) => void
+}) {
+  if (rows.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-signara-steel/40 bg-white py-16 text-center">
+        <FileText className="size-12 text-signara-steel/30" />
+        <p className="mt-4 max-w-sm text-sm text-signara-steel">
+          Nothing is waiting on you right now.
+        </p>
+      </div>
+    )
+  }
+
+  const allSelected = rows.every((row) => selectedIds.has(row.id))
+  const someSelected = rows.some((row) => selectedIds.has(row.id))
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-signara-steel/30 bg-white shadow-sm">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-signara-steel/20">
+            <th className="w-12 px-4 py-3">
+              <Checkbox
+                checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                onCheckedChange={(checked) => onToggleAll(checked === true)}
+                aria-label="Select all awaiting documents"
+              />
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-signara-steel">
+              Title
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-signara-steel">
+              Template
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-signara-steel">
+              Status
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-signara-steel">
+              Initiated by
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-signara-steel">
+              Created
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-signara-steel/10">
+          {rows.map((row) => {
+            const checked = selectedIds.has(row.id)
+            return (
+              <tr
+                key={row.id}
+                className={checked ? 'bg-signara-gold/5' : 'hover:bg-signara-background/50'}
+              >
+                <td className="px-4 py-4">
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={() => onToggle(row.id)}
+                    aria-label={`Select ${row.title}`}
+                  />
+                </td>
+                <td className="px-4 py-4">
+                  <Link
+                    href={`/dashboard/documents/${row.id}`}
+                    className="font-medium text-signara-navy hover:text-signara-gold"
+                  >
+                    {row.title}
+                  </Link>
+                </td>
+                <td className="px-6 py-4 text-sm text-signara-steel">{row.templateName}</td>
+                <td className="px-6 py-4">
+                  <StatusBadge row={row} />
+                </td>
+                <td className="px-6 py-4 text-sm text-signara-steel">{row.initiatorName}</td>
+                <td className="px-6 py-4 text-sm text-signara-steel">
+                  {new Date(row.createdAt).toLocaleDateString('en-GB')}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export function DocumentsTabs({ myDocuments, awaitingMyAction, allDocuments }: DocumentsTabsProps) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  const selectedRows = awaitingMyAction.filter((row) => selectedIds.has(row.id))
+
+  function toggle(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll(checked: boolean) {
+    setSelectedIds(checked ? new Set(awaitingMyAction.map((row) => row.id)) : new Set())
+  }
+
   return (
     <Tabs defaultValue="mine" className="gap-4">
       <TabsList>
@@ -133,10 +253,16 @@ export function DocumentsTabs({ myDocuments, awaitingMyAction, allDocuments }: D
         />
       </TabsContent>
 
-      <TabsContent value="awaiting">
-        <DocumentsTable
+      <TabsContent value="awaiting" className="space-y-4">
+        <AwaitingDocumentsTable
           rows={awaitingMyAction}
-          emptyMessage="Nothing is waiting on you right now."
+          selectedIds={selectedIds}
+          onToggle={toggle}
+          onToggleAll={toggleAll}
+        />
+        <BulkApprovalBar
+          selected={selectedRows}
+          onClearSelection={() => setSelectedIds(new Set())}
         />
       </TabsContent>
 

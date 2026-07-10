@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
 import { Button } from '@/components/ui/button'
-import { DocumentsTabs, type DocumentRow } from '@/components/documents/documents-tabs'
+import { DocumentsTabs, type DocumentRow, type AwaitingDocumentRow } from '@/components/documents/documents-tabs'
 import { Plus } from 'lucide-react'
 import type { User, Document, DocumentStep } from '@/types/database'
 
@@ -55,7 +55,7 @@ export default async function DocumentsPage() {
     supabase
       .from('document_steps')
       .select(
-        'document_id, documents!inner(id, title, status, created_at, initiated_by, organisation_id, templates(name))'
+        'id, document_id, signature_field_id, documents!inner(id, title, status, created_at, initiated_by, organisation_id, templates(name))'
       )
       .eq('assignee_user_id', user.id)
       .eq('status', 'pending')
@@ -74,16 +74,32 @@ export default async function DocumentsPage() {
   const awaitingDocs = (awaitingStepsRaw ?? [])
     .map((row) => {
       const doc = Array.isArray(row.documents) ? row.documents[0] : row.documents
-      return doc as DocumentQueryRow | undefined
+      if (!doc) return null
+      return {
+        doc: doc as DocumentQueryRow,
+        stepId: row.id as string,
+        requiresSignature: Boolean(row.signature_field_id),
+      }
     })
-    .filter((doc): doc is DocumentQueryRow => Boolean(doc))
+    .filter((item): item is { doc: DocumentQueryRow; stepId: string; requiresSignature: boolean } =>
+      Boolean(item)
+    )
+
   const allDocs = allDocsResult.data as DocumentQueryRow[] | null
 
   const allIds = Array.from(
-    new Set([...myDocs, ...awaitingDocs, ...(allDocs ?? [])].map((doc) => doc.id))
+    new Set([
+      ...myDocs,
+      ...awaitingDocs.map((item) => item.doc),
+      ...(allDocs ?? []),
+    ].map((doc) => doc.id))
   )
   const initiatorIds = Array.from(
-    new Set([...myDocs, ...awaitingDocs, ...(allDocs ?? [])].map((doc) => doc.initiated_by))
+    new Set([
+      ...myDocs,
+      ...awaitingDocs.map((item) => item.doc),
+      ...(allDocs ?? []),
+    ].map((doc) => doc.initiated_by))
   )
 
   const [{ data: stepsData }, { data: initiatorsData }] = await Promise.all([
@@ -121,7 +137,11 @@ export default async function DocumentsPage() {
   }
 
   const myDocuments = myDocs.map(toRow)
-  const awaitingMyAction = awaitingDocs.map(toRow)
+  const awaitingMyAction: AwaitingDocumentRow[] = awaitingDocs.map((item) => ({
+    ...toRow(item.doc),
+    stepId: item.stepId,
+    requiresSignature: item.requiresSignature,
+  }))
   const allDocuments = allDocs ? allDocs.map(toRow) : null
 
   return (
