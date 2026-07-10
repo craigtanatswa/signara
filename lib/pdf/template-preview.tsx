@@ -9,11 +9,11 @@ import {
   View,
   StyleSheet,
   PDFViewer,
+  PDFDownloadLink,
 } from '@react-pdf/renderer'
 import type { OrganisationBranding, TiptapDocument, TiptapMark, TiptapNode } from '@/types/database'
 import {
   DEFAULT_TEMPLATE_TEXT_COLOR,
-  FIELD_TYPE_LABELS,
   getFieldDisplayLabel,
   getTemplateTextColor,
   getTemplateUsesOrganisationLogo,
@@ -116,32 +116,57 @@ function createStyles(textColor: string, hasLogo: boolean, layout: PageLayout) {
       borderBottomColor: '#a1a8a2',
       marginVertical: 10,
     },
-    formFieldBox: {
-      borderWidth: 1,
-      borderStyle: 'dashed',
-      borderColor: '#D4AF37',
-      borderRadius: 4,
-      paddingVertical: 6,
-      paddingHorizontal: 10,
+    /** Matches the on-screen document preview: labelled input-style controls. */
+    formFieldStack: {
       marginVertical: 4,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      backgroundColor: '#FFFDF0',
+      minWidth: 160,
+      maxWidth: 280,
     },
     formFieldLabel: {
-      fontSize: 10,
-      color: textColor,
-      flex: 1,
-    },
-    formFieldType: {
       fontSize: 9,
-      color: '#a1a8a2',
-      textTransform: 'uppercase',
+      fontFamily: 'Helvetica-Bold',
+      color: textColor,
+      marginBottom: 3,
     },
     formFieldRequired: {
       fontSize: 9,
       color: '#e53e3e',
+    },
+    formFieldInput: {
+      borderWidth: 1,
+      borderColor: '#A1A8A2',
+      borderRadius: 4,
+      paddingVertical: 6,
+      paddingHorizontal: 8,
+      fontSize: 10,
+      color: '#A1A8A2',
+      backgroundColor: '#FFFFFF',
+      minHeight: 22,
+    },
+    formFieldCheckboxRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginVertical: 4,
+    },
+    formFieldCheckbox: {
+      width: 12,
+      height: 12,
+      borderWidth: 1,
+      borderColor: '#A1A8A2',
+      borderRadius: 2,
+    },
+    formFieldSignature: {
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: '#A1A8A2',
+      borderRadius: 4,
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      marginVertical: 4,
+      backgroundColor: '#F0F1F0',
+      fontSize: 9,
+      color: '#A1A8A2',
     },
     tableContainer: {
       marginVertical: 8,
@@ -376,11 +401,46 @@ function renderNode(
 
     case 'formField': {
       const attrs = normalizeFormFieldAttrs(node.attrs)
+      const label = getFieldDisplayLabel(attrs)
+
+      if (attrs.fieldType === 'signature') {
+        return (
+          <Text key={key} style={styles.formFieldSignature}>
+            Signature — captured after submission
+          </Text>
+        )
+      }
+
+      if (attrs.fieldType === 'checkbox') {
+        return (
+          <View key={key} style={styles.formFieldCheckboxRow}>
+            <View style={styles.formFieldCheckbox} />
+            <Text style={{ fontSize: 10, color: textColor }}>
+              {label}
+              {attrs.required ? <Text style={styles.formFieldRequired}> *</Text> : null}
+            </Text>
+          </View>
+        )
+      }
+
+      const placeholder =
+        attrs.fieldType === 'dropdown'
+          ? 'Select an option'
+          : attrs.fieldType === 'file'
+            ? 'Choose file…'
+            : attrs.fieldType === 'date'
+              ? 'DD/MM/YYYY'
+              : attrs.fieldType === 'number'
+                ? '0'
+                : label
+
       return (
-        <View key={key} style={styles.formFieldBox}>
-          <Text style={styles.formFieldType}>{FIELD_TYPE_LABELS[attrs.fieldType]}:</Text>
-          <Text style={styles.formFieldLabel}>{getFieldDisplayLabel(attrs)}</Text>
-          {attrs.required && <Text style={styles.formFieldRequired}>*</Text>}
+        <View key={key} style={styles.formFieldStack} wrap={false}>
+          <Text style={styles.formFieldLabel}>
+            {label}
+            {attrs.required ? <Text style={styles.formFieldRequired}> *</Text> : null}
+          </Text>
+          <Text style={styles.formFieldInput}>{placeholder}</Text>
         </View>
       )
     }
@@ -534,6 +594,73 @@ export function TemplatePdfPreview({
         organisationBranding={resolvedBranding}
       />
     </PDFViewer>
+  )
+}
+
+/** Download button that generates a PDF matching the on-screen document preview fields. */
+export function TemplatePdfDownloadButton({
+  content,
+  name,
+  organisationBranding,
+  className,
+}: {
+  content: TiptapDocument
+  name: string
+  organisationBranding?: OrganisationBranding | null
+  className?: string
+}) {
+  const resolvedColor = getTemplateTextColor(content) ?? DEFAULT_TEMPLATE_TEXT_COLOR
+  const [resolvedBranding, setResolvedBranding] = useState<OrganisationBranding | null>(null)
+  const [isPreparing, setIsPreparing] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function prepare() {
+      setIsPreparing(true)
+      const branding = await resolveOrganisationBrandingForPdf(organisationBranding)
+      if (!cancelled) {
+        setResolvedBranding(branding)
+        setIsPreparing(false)
+      }
+    }
+
+    prepare()
+
+    return () => {
+      cancelled = true
+    }
+  }, [organisationBranding])
+
+  const safeFilename = `${(name || 'template').replace(/[^a-zA-Z0-9-_ ]/g, '').trim() || 'template'}.pdf`
+
+  if (isPreparing) {
+    return (
+      <button
+        type="button"
+        disabled
+        className={className}
+      >
+        Preparing PDF…
+      </button>
+    )
+  }
+
+  return (
+    <PDFDownloadLink
+      document={
+        <TemplatePdfDocument
+          content={content}
+          name={name}
+          textColor={resolvedColor}
+          organisationBranding={resolvedBranding}
+        />
+      }
+      fileName={safeFilename}
+      className={className}
+    >
+      {({ loading }) => (loading ? 'Preparing PDF…' : 'Download PDF')}
+    </PDFDownloadLink>
   )
 }
 

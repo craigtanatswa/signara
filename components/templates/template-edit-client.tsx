@@ -3,9 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
 import { toast } from 'sonner'
-import { Loader2, ArrowRight, Eye } from 'lucide-react'
+import { Loader2, ArrowRight, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -23,6 +22,7 @@ import { cn } from '@/lib/utils'
 import { TemplateEditor, type TemplateEditorHandle } from './template-editor'
 import { TemplateOrientationDialog } from './template-orientation-dialog'
 import { TemplateUnsavedDialog } from './template-unsaved-dialog'
+import { DocumentPreviewModal } from './document-preview-modal'
 import { createTemplate, updateTemplate } from '@/app/actions/templates'
 import { useTemplateUnsavedGuard } from '@/hooks/use-template-unsaved-guard'
 import {
@@ -126,7 +126,7 @@ export function TemplateEditClient({
   )
 
   const [isMaximized, setIsMaximized] = useState(false)
-  const [showPdfPreview, setShowPdfPreview] = useState(false)
+  const [showDocumentPreview, setShowDocumentPreview] = useState(false)
   const [previewContent, setPreviewContent] = useState<TiptapDocument | null>(null)
   const [orientationDialogOpen, setOrientationDialogOpen] = useState(false)
   const [pendingOrientation, setPendingOrientation] = useState<PageOrientation | null>(null)
@@ -414,9 +414,9 @@ export function TemplateEditClient({
     })
   }
 
-  function handlePreview() {
+  function handleDocumentPreview() {
     setPreviewContent(normalizeTemplateContent(getCurrentBrandedContent()))
-    setShowPdfPreview(true)
+    setShowDocumentPreview(true)
   }
 
   const templateId = savedId ?? template?.id
@@ -531,10 +531,10 @@ export function TemplateEditClient({
                 type="button"
                 variant="outline"
                 className="h-11 w-full gap-1.5 border-signara-navy text-signara-navy hover:bg-signara-navy hover:text-white"
-                onClick={handlePreview}
+                onClick={handleDocumentPreview}
               >
-                <Eye className="size-4" />
-                Preview PDF
+                <FileText className="size-4" />
+                Preview document
               </Button>
 
               <Button
@@ -617,63 +617,14 @@ export function TemplateEditClient({
         onCancel={handleCancelLeave}
       />
 
-      {showPdfPreview && previewContent && (
-        <PdfPreviewModal
+      {showDocumentPreview && previewContent && (
+        <DocumentPreviewModal
           content={previewContent}
           name={name || 'Template preview'}
           organisationBranding={organisationBranding}
-          onClose={() => setShowPdfPreview(false)}
+          onClose={() => setShowDocumentPreview(false)}
         />
       )}
-    </div>
-  )
-}
-
-const TemplatePdfPreview = dynamic(
-  () => import('@/lib/pdf/template-preview').then((m) => m.TemplatePdfPreview),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-full items-center justify-center text-signara-steel">Loading PDF…</div>
-    ),
-  }
-)
-
-function PdfPreviewModal({
-  content,
-  name,
-  organisationBranding: initialBranding,
-  onClose,
-}: {
-  content: TiptapDocument
-  name: string
-  organisationBranding?: OrganisationBranding | null
-  onClose: () => void
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
-    >
-      <div
-        className="relative flex h-[90vh] w-[80vw] flex-col overflow-hidden rounded-lg bg-white shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-signara-steel/20 px-5 py-3">
-          <p className="font-semibold text-signara-navy">{name} — PDF Preview</p>
-          <Button variant="ghost" size="sm" onClick={onClose} className="text-signara-steel">
-            Close
-          </Button>
-        </div>
-        <div className="flex-1">
-          <TemplatePdfPreview
-            key={`${getTemplatePageOrientation(content)}-${initialBranding?.logoUrl ?? 'no-logo'}-${initialBranding?.letterheadUrl ?? 'no-letterhead'}-${initialBranding?.letterheadLandscapeUrl ?? 'no-landscape-letterhead'}`}
-            content={content}
-            name={name}
-            organisationBranding={initialBranding ?? null}
-          />
-        </div>
-      </div>
     </div>
   )
 }

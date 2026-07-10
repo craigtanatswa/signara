@@ -5,6 +5,8 @@ import { Header } from '@/components/layout/header'
 import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
 import { Button } from '@/components/ui/button'
 import { TemplateCard } from '@/components/templates/template-card'
+import { TemplateRequestsPanel } from '@/components/templates/template-requests-panel'
+import { listPendingTemplateRequests } from '@/app/actions/template-requests'
 import { FileEdit, Plus } from 'lucide-react'
 import type { User, Template } from '@/types/database'
 
@@ -26,24 +28,25 @@ export default async function TemplatesPage() {
 
   const user = profile as User
 
-  const [{ data: templates }, { data: departments }] = await Promise.all([
+  const [{ data: templates }, { data: departments }, requestsResult] = await Promise.all([
     supabase
       .from('templates')
       .select('*')
       .eq('organisation_id', user.organisation_id)
       .order('updated_at', { ascending: false }),
     supabase.from('departments').select('id, name').eq('organisation_id', user.organisation_id),
+    listPendingTemplateRequests(),
   ])
 
   const items = (templates ?? []) as Template[]
   const departmentNameById = new Map((departments ?? []).map((d) => [d.id, d.name]))
+  const pendingRequests = requestsResult.requests
 
   return (
     <>
       <Header pageTitle="Templates" user={user} />
       <DashboardPageBody>
         <div className="space-y-6">
-          {/* Page header */}
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-signara-navy">Templates</h2>
@@ -62,7 +65,8 @@ export default async function TemplatesPage() {
             </Button>
           </div>
 
-          {/* Template grid */}
+          <TemplateRequestsPanel requests={pendingRequests} />
+
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-signara-steel/40 bg-white py-20 text-center">
               <FileEdit className="size-12 text-signara-steel/30" />

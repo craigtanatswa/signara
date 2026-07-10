@@ -13,7 +13,9 @@ import {
 } from '@/lib/approval/document-initiator'
 import { getActiveStep } from '@/lib/approval/active-step'
 import { getInitiatorSignatureField } from '@/lib/workflow/signature-fields'
-import { getFieldDisplayLabel } from '@/lib/tiptap/field-utils'
+import { getFieldDisplayLabel, listTemplateFieldsWithRoles } from '@/lib/tiptap/field-utils'
+import { getAttachmentFilename } from '@/lib/storage/document-attachments'
+import { getDocumentAttachmentSignedUrl } from '@/app/actions/documents'
 import { parseStepNotes } from '@/lib/workflow/step-notes'
 import { JOB_LEVEL_LABELS } from '@/types/org-structure'
 import type { JobLevel } from '@/types/org-structure'
@@ -118,6 +120,34 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
     ? getInitiatorSignatureFromData(document.data, initiatorField.fieldId)
     : null
 
+  const detailFields = listTemplateFieldsWithRoles(document.templates?.content ?? null).filter(
+    (field) => field.fieldType !== 'signature'
+  )
+  const detailFieldEntries = await Promise.all(
+    detailFields.map(async (field) => {
+      const value = document.data?.[field.fieldId]
+      let displayValue: string | null = null
+      let fileUrl: string | null = null
+
+      if (value === undefined || value === null || value === '') {
+        displayValue = null
+      } else if (field.fieldType === 'checkbox') {
+        displayValue = value ? 'Yes' : 'No'
+      } else if (field.fieldType === 'file' && typeof value === 'string') {
+        displayValue = getAttachmentFilename(value)
+        const signed = await getDocumentAttachmentSignedUrl(value)
+        fileUrl = 'url' in signed ? signed.url : null
+      } else if (field.fieldType === 'date' && typeof value === 'string') {
+        const parsed = new Date(value)
+        displayValue = Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString('en-GB')
+      } else {
+        displayValue = String(value)
+      }
+
+      return { field, displayValue, fileUrl }
+    })
+  )
+
   const showDraftPanel = isInitiator && canInitiatorEditDocument(document, user.id)
   const canCancel = isInitiator && canInitiatorCancelDocument(document, steps, user.id)
   const showSubmittedCancelPanel =
@@ -171,6 +201,37 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
               </div>
             )}
           </div>
+
+          {detailFieldEntries.length > 0 && (
+            <div className="rounded-lg border border-signara-steel/30 bg-white shadow-sm">
+              <div className="border-b border-signara-steel/20 px-6 py-4">
+                <h3 className="font-semibold text-signara-navy">Details</h3>
+              </div>
+              <dl className="divide-y divide-signara-steel/10">
+                {detailFieldEntries.map(({ field, displayValue, fileUrl }) => (
+                  <div key={field.fieldId} className="grid gap-1 px-6 py-3 sm:grid-cols-2 sm:gap-4">
+                    <dt className="text-sm text-signara-steel">{field.label}</dt>
+                    <dd className="text-sm font-medium text-signara-navy">
+                      {displayValue === null ? (
+                        '—'
+                      ) : fileUrl ? (
+                        <a
+                          href={fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-signara-gold hover:underline"
+                        >
+                          {displayValue}
+                        </a>
+                      ) : (
+                        displayValue
+                      )}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
 
           {showDraftPanel && (
             <InitiatorDocumentPanel

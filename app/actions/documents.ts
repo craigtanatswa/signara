@@ -25,8 +25,14 @@ import {
 import { formatStepPolicyLabel, normaliseWorkflow } from '@/types/workflow'
 import { loadOverseenDepartmentIdsByUser } from '@/lib/org-structure/load-overseen'
 import { JOB_LEVEL_LABELS, isJobLevel, type JobLevel } from '@/types/org-structure'
+import {
+  DOCUMENT_ATTACHMENTS_BUCKET,
+  DOCUMENT_ATTACHMENT_MAX_BYTES,
+  SIGNED_URL_TTL_SECONDS,
+  getDocumentAttachmentPath,
+} from '@/lib/storage/document-attachments'
 import type { OrganisationUserOption, Workflow } from '@/types/workflow'
-import type { Template, Document, DocumentStep } from '@/types/database'
+import type { Template, Document, DocumentStep, TiptapDocument } from '@/types/database'
 
 async function getAuthenticatedUser() {
   const supabase = await createClient()
@@ -128,6 +134,7 @@ export async function getActiveTemplatesForInitiation() {
         description: template.description,
         scope: template.scope,
         departmentName,
+        stepCount: (template.workflow as Workflow | null)?.steps?.length ?? 0,
         updated_at: template.updated_at,
       }
     })
@@ -145,7 +152,12 @@ export interface InitiationStepInfo {
 }
 
 export interface DocumentInitiationContext {
-  template: { id: string; name: string; scope: 'organisation' | 'department' }
+  template: {
+    id: string
+    name: string
+    scope: 'organisation' | 'department'
+    content: TiptapDocument | null
+  }
   steps: InitiationStepInfo[]
   blockingError?: string
 }
@@ -155,9 +167,15 @@ export interface DocumentInitiationContext {
  * applying conditions) and, for each, the pool of people eligible to approve
  * it given who's initiating. Computed server-side so the client never has to
  * be trusted with eligibility logic.
+ *
+ * `formData` should be the values collected so far in the "fill in details"
+ * wizard step — workflow steps can be conditional on field values, so the
+ * active step list can change once the initiator has filled the form in.
+ * Pass `{}` for an initial/blank check (e.g. before the form has been filled).
  */
 export async function getDocumentInitiationContext(
-  templateId: string
+  templateId: string,
+  formData: Record<string, unknown> = {}
 ): Promise<{ error: string } | DocumentInitiationContext> {
   const { supabase, profile } = await getAuthenticatedUser()
 
@@ -190,7 +208,14 @@ export async function getDocumentInitiationContext(
   const signatureFields = listApproverSignatureFieldOptions(template.content)
   const signatureLabelById = new Map(signatureFields.map((f) => [f.fieldId, f.label]))
 
-  const activeSteps = workflow.steps.filter((step) => shouldIncludeWorkflowStep(step, {}))
+  const activeSteps = workflow.steps.filter((step) => shouldIncludeWorkflowStep(step, formData))
+
+  const templateInfo = {
+    id: template.id,
+    name: template.name,
+    scope: template.scope,
+    content: template.content,
+  }
 
   if (activeSteps.length === 0) {
     return { error: 'This template has no approval steps after applying conditions.' }
@@ -205,7 +230,7 @@ export async function getDocumentInitiationContext(
   const needsInitiatorDepartment = activeSteps.some((step) => step.departmentScope === 'initiator')
   if (needsInitiatorDepartment && !initiator.department_id) {
     return {
-      template: { id: template.id, name: template.name, scope: template.scope },
+      template: templateInfo,
       steps: [],
       blockingError:
         'Your account is not assigned to a department. Ask an admin to set your department on the Team page before you can start this document.',
@@ -220,7 +245,7 @@ export async function getDocumentInitiationContext(
 
   if (rosterResult.error) {
     return {
-      template: { id: template.id, name: template.name, scope: template.scope },
+      template: templateInfo,
       steps: [],
       blockingError:
         'Could not load organisation members to check approver availability. Please try again.',
@@ -260,7 +285,7 @@ export async function getDocumentInitiationContext(
     : undefined
 
   return {
-    template: { id: template.id, name: template.name, scope: template.scope },
+    template: templateInfo,
     steps,
     blockingError,
   }
@@ -385,6 +410,63 @@ export async function createDocumentFromTemplate(input: {
   revalidatePath('/dashboard')
 
   return { documentId: document.id }
+}
+
+/**
+ * Uploads a "file" field attachment collected while filling in a document
+ * draft. `draftId` is a client-generated id used purely as a storage folder
+ * key — it does not need to match the eventual document row id.
+ */
+export async function uploadDocumentAttachment(
+  formData: FormData
+): Promise<{ error: string } | { path: string; filename: string }> {
+  const { supabase, profile } = await getAuthenticatedUser()
+
+  const file = formData.get('file')
+  const draftId = formData.get('draftId')
+
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: 'No file selected.' }
+  }
+  if (typeof draftId !== 'string' || !draftId) {
+    return { error: 'Missing draft reference for this upload.' }
+  }
+  if (file.size > DOCUMENT_ATTACHMENT_MAX_BYTES) {
+    return { error: `File must be ${DOCUMENT_ATTACHMENT_MAX_BYTES / (1024 * 1024)} MB or smaller.` }
+  }
+
+  const path = getDocumentAttachmentPath(profile.organisation_id, draftId, file.name)
+  const buffer = Buffer.from(await file.arrayBuffer())
+
+  const { error: uploadError } = await supabase.storage
+    .from(DOCUMENT_ATTACHMENTS_BUCKET)
+    .upload(path, buffer, {
+      upsert: true,
+      contentType: file.type || 'application/octet-stream',
+    })
+
+  if (uploadError) {
+    return { error: uploadError.message }
+  }
+
+  return { path, filename: file.name }
+}
+
+/** Short-lived signed URL for viewing a document attachment (approvers and the initiator only, via RLS). */
+export async function getDocumentAttachmentSignedUrl(
+  path: string
+): Promise<{ error: string } | { url: string }> {
+  const { supabase } = await getAuthenticatedUser()
+
+  const { data, error } = await supabase.storage
+    .from(DOCUMENT_ATTACHMENTS_BUCKET)
+    .createSignedUrl(path, SIGNED_URL_TTL_SECONDS)
+
+  if (error || !data) {
+    return { error: error?.message ?? 'Could not generate a link for this file.' }
+  }
+
+  return { url: data.signedUrl }
 }
 
 async function loadDocumentForInitiator(

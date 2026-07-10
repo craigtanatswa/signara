@@ -3,27 +3,17 @@
 import { NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { DocumentFormFieldPreview } from '@/components/documents/document-form-field-preview'
 import { FieldConfigPopover } from './field-config-popover'
-import { getFieldDisplayLabel, demoteOtherInitiatorSignatures } from '@/lib/tiptap/field-utils'
-import type { FieldType, FormFieldAttrs } from '@/types/database'
-
-const FIELD_ICONS: Record<FieldType, string> = {
-  text: '✏️',
-  number: '🔢',
-  date: '📅',
-  dropdown: '📋',
-  checkbox: '☑️',
-  file: '📎',
-  signature: '✍️',
-}
+import { demoteOtherInitiatorSignatures } from '@/lib/tiptap/field-utils'
+import { cn } from '@/lib/utils'
+import type { FormFieldAttrs } from '@/types/database'
 
 export function FormFieldNodeView({ node, updateAttributes, deleteNode, selected, editor }: NodeViewProps) {
   const [popoverOpen, setPopoverOpen] = useState(false)
   const fieldRef = useRef<HTMLSpanElement>(null)
   const attrs = node.attrs as FormFieldAttrs
-  const displayLabel = getFieldDisplayLabel(attrs)
   const isConfigured = attrs.configured !== false
-  const icon = FIELD_ICONS[attrs.fieldType] ?? '📝'
 
   const scrollFieldIntoView = useCallback(() => {
     requestAnimationFrame(() => {
@@ -38,11 +28,10 @@ export function FormFieldNodeView({ node, updateAttributes, deleteNode, selected
   const confirmUnconfiguredField = useCallback(() => {
     if (attrs.configured === false) {
       updateAttributes({
-        label: getFieldDisplayLabel(attrs),
         configured: true,
       })
     }
-  }, [attrs, updateAttributes])
+  }, [attrs.configured, updateAttributes])
 
   useEffect(() => {
     const openHandler = (e: Event) => {
@@ -87,7 +76,7 @@ export function FormFieldNodeView({ node, updateAttributes, deleteNode, selected
   return (
     <NodeViewWrapper
       as="span"
-      className="inline-block"
+      className="inline-block align-middle"
       onDoubleClick={(e: React.MouseEvent) => {
         e.preventDefault()
         e.stopPropagation()
@@ -103,27 +92,35 @@ export function FormFieldNodeView({ node, updateAttributes, deleteNode, selected
       >
         <span
           ref={fieldRef}
-          className={`
-            inline-flex cursor-pointer select-none items-center gap-1.5 rounded-full
-            border border-dashed px-2.5 py-0.5 text-xs font-medium transition-colors
-            ${!isConfigured
-              ? 'border-amber-400 bg-amber-50 text-amber-900'
-              : selected
-                ? 'border-signara-navy bg-signara-navy/10 text-signara-navy'
-                : 'border-signara-gold/60 bg-signara-gold/10 text-signara-navy hover:bg-signara-gold/20'
-            }
-          `}
-          title={isConfigured ? 'Double-click to configure' : 'Click to configure this field'}
-        >
-          <span>{icon}</span>
-          <span>{displayLabel}</span>
-          {attrs.required && (
-            <span className="text-red-500" aria-label="Required">
-              *
-            </span>
+          role="button"
+          tabIndex={0}
+          className={cn(
+            'relative inline-block cursor-pointer rounded-sm align-middle transition-shadow',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signara-navy focus-visible:ring-offset-1',
+            !isConfigured && 'ring-2 ring-amber-400/70 ring-offset-1',
+            isConfigured && selected && 'ring-2 ring-signara-navy/50 ring-offset-1',
+            popoverOpen && 'ring-2 ring-signara-gold ring-offset-1'
           )}
+          title={isConfigured ? 'Click to configure field' : 'Configure this field'}
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setPopoverOpen(true)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setPopoverOpen(true)
+            }
+          }}
+        >
+          <span className="pointer-events-none select-none">
+            <DocumentFormFieldPreview attrs={attrs} />
+          </span>
           {!isConfigured && (
-            <span className="text-[10px] uppercase tracking-wide text-amber-700">Setup</span>
+            <span className="pointer-events-none absolute -top-2 right-0 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm">
+              Setup
+            </span>
           )}
         </span>
       </FieldConfigPopover>

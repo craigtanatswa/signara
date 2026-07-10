@@ -4,8 +4,28 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
 import { Button } from '@/components/ui/button'
-import { FileText, Plus } from 'lucide-react'
-import type { User, Document } from '@/types/database'
+import { DocumentsTabs, type DocumentRow } from '@/components/documents/documents-tabs'
+import { Plus } from 'lucide-react'
+import type { User, Document, DocumentStep } from '@/types/database'
+
+type DocumentQueryRow = Pick<Document, 'id' | 'title' | 'status' | 'created_at' | 'initiated_by'> & {
+  templates: { name: string } | { name: string }[] | null
+}
+
+function getTemplateName(templates: DocumentQueryRow['templates']): string {
+  const template = Array.isArray(templates) ? templates[0] : templates
+  return template?.name ?? 'Unknown template'
+}
+
+function buildStepProgress(
+  steps: Pick<DocumentStep, 'step_order' | 'status'>[]
+): DocumentRow['stepProgress'] {
+  if (steps.length === 0) return null
+  const pendingIndex = steps.findIndex((step) => step.status === 'pending')
+  const approvedCount = steps.filter((step) => step.status === 'approved').length
+  const current = pendingIndex >= 0 ? pendingIndex + 1 : Math.min(approvedCount + 1, steps.length)
+  return { current, total: steps.length }
+}
 
 export default async function DocumentsPage() {
   const supabase = await createClient()
@@ -22,15 +42,87 @@ export default async function DocumentsPage() {
   if (!profile) redirect('/login')
 
   const user = profile as User
+  const isAdmin = user.role === 'admin'
 
-  const { data: documents } = await supabase
-    .from('documents')
-    .select('id, title, status, created_at, updated_at')
-    .eq('organisation_id', profile.organisation_id)
-    .order('created_at', { ascending: false })
-    .limit(50)
+  const [{ data: myDocsRaw }, { data: awaitingStepsRaw }, allDocsResult] = await Promise.all([
+    supabase
+      .from('documents')
+      .select('id, title, status, created_at, initiated_by, templates(name)')
+      .eq('organisation_id', user.organisation_id)
+      .eq('initiated_by', user.id)
+      .order('created_at', { ascending: false })
+      .limit(100),
+    supabase
+      .from('document_steps')
+      .select(
+        'document_id, documents!inner(id, title, status, created_at, initiated_by, organisation_id, templates(name))'
+      )
+      .eq('assignee_user_id', user.id)
+      .eq('status', 'pending')
+      .eq('documents.organisation_id', user.organisation_id),
+    isAdmin
+      ? supabase
+          .from('documents')
+          .select('id, title, status, created_at, initiated_by, templates(name)')
+          .eq('organisation_id', user.organisation_id)
+          .order('created_at', { ascending: false })
+          .limit(100)
+      : Promise.resolve({ data: null }),
+  ])
 
-  const items = (documents ?? []) as Pick<Document, 'id' | 'title' | 'status' | 'created_at'>[]
+  const myDocs = (myDocsRaw ?? []) as DocumentQueryRow[]
+  const awaitingDocs = (awaitingStepsRaw ?? [])
+    .map((row) => {
+      const doc = Array.isArray(row.documents) ? row.documents[0] : row.documents
+      return doc as DocumentQueryRow | undefined
+    })
+    .filter((doc): doc is DocumentQueryRow => Boolean(doc))
+  const allDocs = allDocsResult.data as DocumentQueryRow[] | null
+
+  const allIds = Array.from(
+    new Set([...myDocs, ...awaitingDocs, ...(allDocs ?? [])].map((doc) => doc.id))
+  )
+  const initiatorIds = Array.from(
+    new Set([...myDocs, ...awaitingDocs, ...(allDocs ?? [])].map((doc) => doc.initiated_by))
+  )
+
+  const [{ data: stepsData }, { data: initiatorsData }] = await Promise.all([
+    allIds.length > 0
+      ? supabase.from('document_steps').select('document_id, step_order, status').in('document_id', allIds)
+      : Promise.resolve({ data: [] }),
+    initiatorIds.length > 0
+      ? supabase.from('users').select('id, full_name').in('id', initiatorIds)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  const stepsByDocument = new Map<string, Pick<DocumentStep, 'step_order' | 'status'>[]>()
+  for (const step of stepsData ?? []) {
+    const list = stepsByDocument.get(step.document_id) ?? []
+    list.push(step)
+    stepsByDocument.set(step.document_id, list)
+  }
+  for (const list of stepsByDocument.values()) {
+    list.sort((a, b) => a.step_order - b.step_order)
+  }
+
+  const initiatorNameById = new Map((initiatorsData ?? []).map((row) => [row.id, row.full_name]))
+
+  function toRow(doc: DocumentQueryRow): DocumentRow {
+    return {
+      id: doc.id,
+      title: doc.title,
+      templateName: getTemplateName(doc.templates),
+      status: doc.status,
+      initiatorName: initiatorNameById.get(doc.initiated_by) ?? 'Unknown',
+      createdAt: doc.created_at,
+      stepProgress:
+        doc.status === 'in_progress' ? buildStepProgress(stepsByDocument.get(doc.id) ?? []) : null,
+    }
+  }
+
+  const myDocuments = myDocs.map(toRow)
+  const awaitingMyAction = awaitingDocs.map(toRow)
+  const allDocuments = allDocs ? allDocs.map(toRow) : null
 
   return (
     <>
@@ -52,59 +144,11 @@ export default async function DocumentsPage() {
             </Button>
           </div>
 
-          {items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-signara-steel/40 bg-white py-20 text-center">
-              <FileText className="size-14 text-signara-steel/40" />
-              <h3 className="mt-4 font-semibold text-signara-navy">No documents yet</h3>
-              <p className="mt-1 max-w-sm text-sm text-signara-steel">
-                Start a document from an active template to begin an approval flow.
-              </p>
-              <Button asChild variant="signara" className="mt-6">
-                <Link href="/dashboard/documents/new">
-                  <Plus className="mr-1.5 size-4" />
-                  New document
-                </Link>
-              </Button>
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-lg border border-signara-steel/30 bg-white shadow-sm">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-signara-steel/20">
-                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-signara-steel">
-                      Title
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-signara-steel">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-signara-steel">
-                      Created
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-signara-steel/10">
-                  {items.map((document) => (
-                    <tr key={document.id} className="hover:bg-signara-background/50">
-                      <td className="px-6 py-4">
-                        <Link
-                          href={`/dashboard/documents/${document.id}`}
-                          className="font-medium text-signara-navy hover:text-signara-gold"
-                        >
-                          {document.title}
-                        </Link>
-                      </td>
-                      <td className="px-6 py-4 text-sm capitalize text-signara-steel">
-                        {document.status.replace('_', ' ')}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-signara-steel">
-                        {new Date(document.created_at).toLocaleDateString('en-GB')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DocumentsTabs
+            myDocuments={myDocuments}
+            awaitingMyAction={awaitingMyAction}
+            allDocuments={allDocuments}
+          />
         </div>
       </DashboardPageBody>
     </>

@@ -3,8 +3,9 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
 import { BackLink } from '@/components/layout/back-link'
-import { StartDocumentClient } from '@/components/documents/start-document-client'
+import { InitiationWizard } from '@/components/documents/initiation-wizard'
 import { getDocumentInitiationContext } from '@/app/actions/documents'
+import { getOrganisationBrandingForOrg } from '@/app/actions/organisation-branding'
 import type { User } from '@/types/database'
 
 interface StartDocumentPageProps {
@@ -35,25 +36,26 @@ export default async function StartDocumentPage({ params }: StartDocumentPagePro
     notFound()
   }
 
+  const organisationBranding = await getOrganisationBrandingForOrg(user.organisation_id)
+
   return (
     <>
-      <Header pageTitle="Start document" user={user} />
-      <DashboardPageBody>
-        <div className="mx-auto max-w-xl space-y-6">
-          <BackLink href="/dashboard/documents/new" label="Back to templates" />
-          <div>
-            <h2 className="text-xl font-bold text-signara-navy">{context.template.name}</h2>
-            <p className="mt-1 text-sm text-signara-steel">
-              Choose an approver for each step below. Every approver must be more senior than
-              you, and the chain runs in order — the next approver is notified once the previous
-              one signs.
+      <Header pageTitle={context.template.name} user={user} />
+      <DashboardPageBody className="p-4 pb-0">
+        <div className="mx-auto flex min-h-0 w-full max-w-[860px] flex-col">
+          <div className="relative mb-3 flex items-center">
+            <BackLink href="/dashboard/documents/new" label="Back to templates" />
+            <p className="pointer-events-none absolute inset-x-0 text-center text-sm text-signara-steel">
+              Fill in details, assign approvers, then submit
             </p>
           </div>
-          <StartDocumentClient
+          <InitiationWizard
             templateId={context.template.id}
             templateName={context.template.name}
-            steps={context.steps}
-            blockingError={context.blockingError}
+            templateContent={context.template.content}
+            organisationBranding={organisationBranding}
+            initialSteps={context.steps}
+            initialBlockingError={context.blockingError}
           />
         </div>
       </DashboardPageBody>

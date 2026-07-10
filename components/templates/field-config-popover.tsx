@@ -57,9 +57,19 @@ export function FieldConfigPopover({
         attrs.fieldType === 'dropdown'
           ? options.map((option) => option.trim()).filter(Boolean)
           : [],
-      configured: true,
+      configured: attrs.configured,
       ...extra,
     }
+  }
+
+  function previewUpdate(extra: Partial<FormFieldAttrs> = {}) {
+    const trimmedLabel = label.trim() || getDefaultFieldLabel(attrs.fieldType)
+    onUpdate(
+      buildFieldUpdate(
+        trimmedLabel,
+        isSignatureField ? { signatureRole, ...extra } : extra
+      )
+    )
   }
 
   function handleOpenChange(nextOpen: boolean) {
@@ -78,7 +88,7 @@ export function FieldConfigPopover({
       onUpdate(
         buildFieldUpdate(
           trimmedLabel,
-          isSignatureField ? { signatureRole } : {}
+          isSignatureField ? { signatureRole, configured: true } : { configured: true }
         )
       )
     }
@@ -102,12 +112,12 @@ export function FieldConfigPopover({
         return
       }
 
-      onUpdate(buildFieldUpdate(trimmedLabel, { options: cleanedOptions }))
+      onUpdate(buildFieldUpdate(trimmedLabel, { options: cleanedOptions, configured: true }))
     } else {
       onUpdate(
         buildFieldUpdate(
           trimmedLabel,
-          isSignatureField ? { signatureRole } : {}
+          isSignatureField ? { signatureRole, configured: true } : { configured: true }
         )
       )
     }
@@ -122,15 +132,33 @@ export function FieldConfigPopover({
   }
 
   function addOption() {
-    setOptions((prev) => [...prev, ''])
+    const nextOptions = [...options, '']
+    setOptions(nextOptions)
+    onUpdate(
+      buildFieldUpdate(label.trim() || getDefaultFieldLabel(attrs.fieldType), {
+        options: nextOptions.map((option) => option.trim()).filter(Boolean),
+      })
+    )
   }
 
   function updateOption(index: number, value: string) {
-    setOptions((prev) => prev.map((option, i) => (i === index ? value : option)))
+    const nextOptions = options.map((option, i) => (i === index ? value : option))
+    setOptions(nextOptions)
+    onUpdate(
+      buildFieldUpdate(label.trim() || getDefaultFieldLabel(attrs.fieldType), {
+        options: nextOptions.map((option) => option.trim()).filter(Boolean),
+      })
+    )
   }
 
   function removeOption(index: number) {
-    setOptions((prev) => prev.filter((_, i) => i !== index))
+    const nextOptions = options.filter((_, i) => i !== index)
+    setOptions(nextOptions)
+    onUpdate(
+      buildFieldUpdate(label.trim() || getDefaultFieldLabel(attrs.fieldType), {
+        options: nextOptions.map((option) => option.trim()).filter(Boolean),
+      })
+    )
   }
 
   return (
@@ -153,7 +181,7 @@ export function FieldConfigPopover({
           <p className="text-sm font-semibold text-signara-navy">Configure field</p>
           {!isConfigured && (
             <p className="mt-1 text-xs text-signara-steel">
-              Choose a label and click Save to insert this field.
+              The field updates in the document as you edit. Click Save when finished.
             </p>
           )}
         </div>
@@ -182,8 +210,15 @@ export function FieldConfigPopover({
               id="field-label"
               value={label}
               onChange={(e) => {
-                setLabel(e.target.value)
+                const nextLabel = e.target.value
+                setLabel(nextLabel)
                 if (labelError) setLabelError(null)
+                onUpdate(
+                  buildFieldUpdate(
+                    nextLabel.trim() || getDefaultFieldLabel(attrs.fieldType),
+                    isSignatureField ? { signatureRole } : {}
+                  )
+                )
               }}
               placeholder={`e.g. ${fieldTypeLabel} field`}
               className="h-8 text-sm"
@@ -203,7 +238,14 @@ export function FieldConfigPopover({
               <Label htmlFor="field-required" className="text-xs font-medium text-signara-navy cursor-pointer">
                 Required
               </Label>
-              <Switch id="field-required" checked={required} onCheckedChange={setRequired} />
+              <Switch
+                id="field-required"
+                checked={required}
+                onCheckedChange={(checked) => {
+                  setRequired(checked)
+                  previewUpdate({ required: checked })
+                }}
+              />
             </div>
           )}
 
@@ -228,9 +270,11 @@ export function FieldConfigPopover({
                 <Switch
                   id="initiator-signature"
                   checked={signatureRole === 'initiator'}
-                  onCheckedChange={(checked) =>
-                    setSignatureRole(checked ? 'initiator' : 'approver')
-                  }
+                  onCheckedChange={(checked) => {
+                    const nextRole = checked ? 'initiator' : 'approver'
+                    setSignatureRole(nextRole)
+                    previewUpdate({ signatureRole: nextRole })
+                  }}
                 />
               </div>
             </>

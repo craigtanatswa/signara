@@ -173,3 +173,26 @@ export interface Notification {
   read: boolean
   created_at: string
 }
+
+// ─── Template requests ───────────────────────────────────────────────────────
+
+export type TemplateRequestStatus = 'pending' | 'fulfilled' | 'dismissed'
+
+/** A senior+ member asking an admin to digitise a physical form for their department. */
+export interface TemplateRequest {
+  id: string
+  organisation_id: string
+  requested_by: string
+  department_id: string
+  title: string
+  description: string | null
+  attachment_path: string
+  attachment_filename: string
+  status: TemplateRequestStatus
+  admin_notes: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  resulting_template_id: string | null
+  created_at: string
+  updated_at: string
+}

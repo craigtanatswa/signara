@@ -140,31 +140,40 @@ export function InitiatorDocumentPanel({
       <p className="text-sm font-semibold text-signara-navy">Draft — finish before submitting</p>
       <p className="mt-1 text-sm text-signara-steel">
         {requiresInitiatorSignature
-          ? 'Sign below, then submit for approval. You can update your signature while this document is still a draft.'
+          ? hasSavedSignature
+            ? 'Your initiator signature is ready. Submit for approval, or clear and re-sign if needed.'
+            : 'Sign below, then submit for approval. You can update your signature while this document is still a draft.'
           : 'Review your document, then submit for approval. You can cancel while this document is still a draft.'}
       </p>
 
       {initiatorFieldLabel && (
         <div className="mt-4 space-y-2">
-          <p className="text-sm font-medium text-signara-navy">
-            {initiatorFieldLabel}
-            <span className="ml-1 text-red-500">*</span>
-          </p>
-          <SignaturePad onChange={setSignatureDataUrl} />
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isPending || !signatureDataUrl}
-            onClick={handleSaveSignature}
-            className="border-signara-navy text-signara-navy hover:bg-signara-navy hover:text-white"
-          >
-            {isPending ? (
-              <Loader2 className="mr-1.5 size-4 animate-spin" />
-            ) : (
-              <Save className="mr-1.5 size-4" />
-            )}
-            Save signature
-          </Button>
+          <SignaturePad
+            label={initiatorFieldLabel}
+            value={signatureDataUrl}
+            onChange={setSignatureDataUrl}
+          />
+          {(!hasSavedSignature || hasUnsavedSignature) && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isPending || !signatureDataUrl}
+              onClick={handleSaveSignature}
+              className="border-signara-navy text-signara-navy hover:bg-signara-navy hover:text-white"
+            >
+              {isPending ? (
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              ) : (
+                <Save className="mr-1.5 size-4" />
+              )}
+              Save signature
+            </Button>
+          )}
+          {hasSavedSignature && !hasUnsavedSignature && (
+            <p className="text-xs text-signara-steel">
+              Signature captured during fill details. Clear it above if you need to re-sign.
+            </p>
+          )}
           {hasUnsavedSignature && (
             <p className="text-xs text-amber-700">
               You have an unsaved signature — click Save signature, or Submit will save it for you.
