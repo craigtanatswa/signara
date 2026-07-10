@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   FileText,
   FileEdit,
+  Inbox,
   Users,
   Settings,
   LogOut,
@@ -27,6 +28,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/documents', label: 'Documents', icon: FileText },
+  { href: '/dashboard/requests', label: 'Requests', icon: Inbox },
   {
     href: '/dashboard/templates',
     label: 'Templates',

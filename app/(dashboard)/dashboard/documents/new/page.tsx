@@ -5,12 +5,10 @@ import { Header } from '@/components/layout/header'
 import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { RequestTemplateDialog } from '@/components/templates/request-template-dialog'
 import { getActiveTemplatesForInitiation } from '@/app/actions/documents'
 import { canRequestTemplate } from '@/lib/templates/can-request-template'
-import { FileText, PlayCircle, Plus } from 'lucide-react'
+import { FileText, Inbox, PlayCircle, Plus } from 'lucide-react'
 import type { User } from '@/types/database'
-import type { DepartmentOption } from '@/types/org-structure'
 
 export default async function NewDocumentPage() {
   const supabase = await createClient()
@@ -30,16 +28,6 @@ export default async function NewDocumentPage() {
   const { templates, error } = await getActiveTemplatesForInitiation()
   const eligibleToRequest = canRequestTemplate(user.job_level)
 
-  const { data: departmentsData } = eligibleToRequest
-    ? await supabase
-        .from('departments')
-        .select('id, name, slug, is_executive')
-        .eq('organisation_id', user.organisation_id)
-        .order('name')
-    : { data: [] }
-
-  const departments = (departmentsData ?? []) as DepartmentOption[]
-
   return (
     <>
       <Header pageTitle="New document" user={user} />
@@ -52,13 +40,17 @@ export default async function NewDocumentPage() {
                 Choose an active template. You&apos;ll pick an approver for each step next.
               </p>
             </div>
-            {eligibleToRequest && departments.length > 0 && (
-              <RequestTemplateDialog
-                departments={departments}
-                defaultDepartmentId={user.department_id}
-                triggerVariant="outline"
-                triggerClassName="border-signara-navy text-signara-navy hover:bg-signara-navy hover:text-white"
-              />
+            {eligibleToRequest && (
+              <Button
+                asChild
+                variant="outline"
+                className="border-signara-navy text-signara-navy hover:bg-signara-navy hover:text-white"
+              >
+                <Link href="/dashboard/requests">
+                  <Inbox className="mr-1.5 size-4" />
+                  Request a template
+                </Link>
+              </Button>
             )}
           </div>
 
@@ -84,19 +76,19 @@ export default async function NewDocumentPage() {
                     </Link>
                   </Button>
                 </>
-              ) : eligibleToRequest && departments.length > 0 ? (
+              ) : eligibleToRequest ? (
                 <>
                   <p className="mt-4 font-medium text-signara-navy">No templates available yet</p>
                   <p className="mt-1 max-w-sm text-sm text-signara-steel">
                     Upload a scan of the paper form you need and ask an administrator to digitise
                     it for your department.
                   </p>
-                  <div className="mt-6">
-                    <RequestTemplateDialog
-                      departments={departments}
-                      defaultDepartmentId={user.department_id}
-                    />
-                  </div>
+                  <Button asChild variant="signara" className="mt-6">
+                    <Link href="/dashboard/requests">
+                      <Inbox className="mr-1.5 size-4" />
+                      Go to Requests
+                    </Link>
+                  </Button>
                 </>
               ) : (
                 <>

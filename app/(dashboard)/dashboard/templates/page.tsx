@@ -5,9 +5,7 @@ import { Header } from '@/components/layout/header'
 import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
 import { Button } from '@/components/ui/button'
 import { TemplateCard } from '@/components/templates/template-card'
-import { TemplateRequestsPanel } from '@/components/templates/template-requests-panel'
-import { listPendingTemplateRequests } from '@/app/actions/template-requests'
-import { FileEdit, Plus } from 'lucide-react'
+import { FileEdit, Inbox, Plus } from 'lucide-react'
 import type { User, Template } from '@/types/database'
 
 export default async function TemplatesPage() {
@@ -28,44 +26,61 @@ export default async function TemplatesPage() {
 
   const user = profile as User
 
-  const [{ data: templates }, { data: departments }, requestsResult] = await Promise.all([
-    supabase
-      .from('templates')
-      .select('*')
-      .eq('organisation_id', user.organisation_id)
-      .order('updated_at', { ascending: false }),
-    supabase.from('departments').select('id, name').eq('organisation_id', user.organisation_id),
-    listPendingTemplateRequests(),
-  ])
+  const [{ data: templates }, { data: departments }, { count: pendingRequestCount }] =
+    await Promise.all([
+      supabase
+        .from('templates')
+        .select('*')
+        .eq('organisation_id', user.organisation_id)
+        .order('updated_at', { ascending: false }),
+      supabase.from('departments').select('id, name').eq('organisation_id', user.organisation_id),
+      supabase
+        .from('template_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('organisation_id', user.organisation_id)
+        .eq('status', 'pending'),
+    ])
 
   const items = (templates ?? []) as Template[]
   const departmentNameById = new Map((departments ?? []).map((d) => [d.id, d.name]))
-  const pendingRequests = requestsResult.requests
+  const pendingCount = pendingRequestCount ?? 0
 
   return (
     <>
       <Header pageTitle="Templates" user={user} />
       <DashboardPageBody>
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold text-signara-navy">Templates</h2>
               <p className="mt-0.5 text-sm text-signara-steel">
                 Reusable document layouts with form fields and approval workflows.
               </p>
             </div>
-            <Button
-              asChild
-              className="bg-signara-gold text-signara-navy font-semibold hover:bg-[#C49B2E]"
-            >
-              <Link href="/dashboard/templates/new">
-                <Plus className="mr-1.5 size-4" />
-                New template
-              </Link>
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {pendingCount > 0 && (
+                <Button
+                  asChild
+                  variant="outline"
+                  className="border-signara-navy text-signara-navy hover:bg-signara-navy hover:text-white"
+                >
+                  <Link href="/dashboard/requests">
+                    <Inbox className="mr-1.5 size-4" />
+                    {pendingCount} pending request{pendingCount === 1 ? '' : 's'}
+                  </Link>
+                </Button>
+              )}
+              <Button
+                asChild
+                className="bg-signara-gold text-signara-navy font-semibold hover:bg-[#C49B2E]"
+              >
+                <Link href="/dashboard/templates/new">
+                  <Plus className="mr-1.5 size-4" />
+                  New template
+                </Link>
+              </Button>
+            </div>
           </div>
-
-          <TemplateRequestsPanel requests={pendingRequests} />
 
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-signara-steel/40 bg-white py-20 text-center">
