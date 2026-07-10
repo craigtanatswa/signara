@@ -58,6 +58,11 @@ export function getJobLevelLabel(level: JobLevel): string {
   return JOB_LEVEL_LABELS[level]
 }
 
+/** True when `userLevel` meets the step minimum (same level or more senior). */
+export function meetsStepMinimumJobLevel(userLevel: JobLevel, stepMinimum: JobLevel): boolean {
+  return JOB_LEVEL_RANK[userLevel] <= JOB_LEVEL_RANK[stepMinimum]
+}
+
 export function slugifyDepartmentName(name: string): string {
   return name
     .trim()

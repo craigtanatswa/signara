@@ -220,8 +220,8 @@ export function StepConfigPanel({
                 </SelectContent>
               </Select>
               <p className="text-xs text-signara-steel">
-                The approver must be at this level or more senior — and always more senior than
-                the initiator.
+                People at this level and above can be chosen as approvers. Options are the same for
+                every initiator in the selected department scope.
               </p>
             </div>
 

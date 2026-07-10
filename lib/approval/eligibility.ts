@@ -3,16 +3,18 @@
 // A user is eligible to approve a workflow step when:
 //   1. They are not the document initiator.
 //   2. Their job level meets the step's minimum job level (or is more senior).
-//   3. They are strictly more senior than the initiator.
-//   4. They belong to the department the step's scope requires (if any).
+//   3. They belong to the department the step's scope requires (if any).
 //
-// A full approval chain is valid when every step has an eligible approver
-// assigned, no one appears twice, and seniority never decreases as the
-// chain progresses (each step is approved by someone at least as senior
-// as the previous approver).
+// Eligible pools are the same for every initiator in a given department —
+// initiator seniority does not shrink or expand the options. The initiator
+// chooses who approves from that pool.
+//
+// Empty assignments are allowed: those steps are skipped. At least one
+// approver must still be assigned. Each step is validated only against its
+// own admin-set minimum job level and department scope.
 
 import { userBelongsToDepartment } from '@/lib/org-structure/overseen-departments'
-import { JOB_LEVEL_LABELS, JOB_LEVEL_RANK, type JobLevel } from '@/types/org-structure'
+import { meetsStepMinimumJobLevel, type JobLevel } from '@/types/org-structure'
 import type { TemplateScope } from '@/types/database'
 import type { OrganisationUserOption, Workflow, WorkflowStep } from '@/types/workflow'
 import { shouldIncludeWorkflowStep } from '@/lib/workflow/resolve-steps'
@@ -30,12 +32,7 @@ export interface EligibilityTemplate {
 
 /** True when `a` is more senior than, or as senior as, `b` (lower rank number = more senior). */
 export function isRankAtLeastAsSenior(a: JobLevel, b: JobLevel): boolean {
-  return JOB_LEVEL_RANK[a] <= JOB_LEVEL_RANK[b]
-}
-
-/** True when `a` is strictly more senior than `b`. */
-export function isRankMoreSenior(a: JobLevel, b: JobLevel): boolean {
-  return JOB_LEVEL_RANK[a] < JOB_LEVEL_RANK[b]
+  return meetsStepMinimumJobLevel(a, b)
 }
 
 /** Can this user initiate a document from this template? Org templates: anyone. Dept templates: members of that department only. */
@@ -53,8 +50,7 @@ export function isEligibleApprover(
   step: WorkflowStep
 ): boolean {
   if (approver.id === initiator.id) return false
-  if (!isRankAtLeastAsSenior(approver.job_level, step.minJobLevel)) return false
-  if (!isRankMoreSenior(approver.job_level, initiator.job_level)) return false
+  if (!meetsStepMinimumJobLevel(approver.job_level, step.minJobLevel)) return false
 
   if (step.departmentScope === 'initiator') {
     return (
@@ -128,20 +124,18 @@ export function buildStepApproverShortageMessage(input: {
   }
 
   if (inScope.length === 0) {
-    return `${prefix}: No colleagues are assigned to ${scopeLabel} (${policyLabel}). Ask an admin to assign approvers to that department on the Team page.`
+    return `${prefix}: No colleagues are assigned to ${scopeLabel} (${policyLabel}). You can leave this step empty to skip it, or ask an admin to assign people to that department on the Team page.`
   }
 
-  const seniorEnough = inScope.filter(
-    (user) =>
-      isRankAtLeastAsSenior(user.job_level, step.minJobLevel) &&
-      isRankMoreSenior(user.job_level, initiator.job_level)
+  const seniorEnough = inScope.filter((user) =>
+    meetsStepMinimumJobLevel(user.job_level, step.minJobLevel)
   )
 
   if (seniorEnough.length === 0) {
-    return `${prefix}: ${inScope.length} colleague(s) in ${scopeLabel}, but none meet this step's requirements (${policyLabel}). You are ${JOB_LEVEL_LABELS[initiator.job_level]} — approvers must hold the minimum level and be more senior than you. Ask an admin to adjust job levels or the template.`
+    return `${prefix}: ${inScope.length} colleague(s) in ${scopeLabel}, but none meet this step's minimum level (${policyLabel}). You can leave this step empty to skip it, or ask an admin to adjust job levels or the template.`
   }
 
-  return `${prefix}: No eligible approver for you (${policyLabel}). Contact an admin to adjust this template or your organisation structure.`
+  return `${prefix}: No eligible approver available (${policyLabel}). You can leave this step empty to skip it, or contact an admin.`
 }
 
 export interface ChainAssignment {
@@ -165,12 +159,16 @@ export interface ChainValidationResult {
   valid: boolean
   errors: string[]
   resolvedSteps: ResolvedApprovalStep[]
+  skippedStepIds: string[]
 }
 
 /**
  * Validates and resolves the full approver chain chosen by the initiator at
  * document creation time. Re-checks eligibility server-side — never trust
  * assignments coming from the client without running this first.
+ *
+ * Steps left without an assignee are skipped. At least one assigned step is
+ * required.
  */
 export function validateApprovalChain(input: {
   workflow: Workflow
@@ -183,8 +181,13 @@ export function validateApprovalChain(input: {
   const formData = input.formData ?? {}
   const errors: string[] = []
   const resolvedSteps: ResolvedApprovalStep[] = []
+  const skippedStepIds: string[] = []
   const usersById = new Map(users.map((u) => [u.id, u]))
-  const assignmentsByStepId = new Map(assignments.map((a) => [a.workflowStepId, a.userId]))
+  const assignmentsByStepId = new Map(
+    assignments
+      .filter((a) => Boolean(a.userId))
+      .map((a) => [a.workflowStepId, a.userId])
+  )
 
   const activeSteps = workflow.steps.filter((step) => shouldIncludeWorkflowStep(step, formData))
 
@@ -193,10 +196,10 @@ export function validateApprovalChain(input: {
       valid: false,
       errors: ['This template has no approval steps after applying conditions.'],
       resolvedSteps,
+      skippedStepIds,
     }
   }
 
-  let previousRank: number | null = null
   let stepOrder = 0
   const seenUserIds = new Set<string>()
 
@@ -205,7 +208,7 @@ export function validateApprovalChain(input: {
     const userId = assignmentsByStepId.get(step.id)
 
     if (!userId) {
-      errors.push(`${position} needs an approver selected.`)
+      skippedStepIds.push(step.id)
       return
     }
 
@@ -227,16 +230,7 @@ export function validateApprovalChain(input: {
       return
     }
 
-    const rank = JOB_LEVEL_RANK[approver.job_level]
-    if (previousRank !== null && rank > previousRank) {
-      errors.push(
-        `${position}'s approver must be as senior as, or more senior than, the previous step's approver.`
-      )
-      return
-    }
-
     seenUserIds.add(approver.id)
-    previousRank = rank
 
     resolvedSteps.push({
       workflowStepId: step.id,
@@ -252,9 +246,14 @@ export function validateApprovalChain(input: {
     stepOrder += 1
   })
 
+  if (errors.length === 0 && resolvedSteps.length === 0) {
+    errors.push('Select at least one approver. Empty steps are skipped, but the document needs someone to approve it.')
+  }
+
   return {
-    valid: errors.length === 0 && resolvedSteps.length === activeSteps.length,
+    valid: errors.length === 0 && resolvedSteps.length > 0,
     errors,
     resolvedSteps,
+    skippedStepIds,
   }
 }

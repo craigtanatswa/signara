@@ -109,8 +109,7 @@ export function normaliseWorkflowStep(step: WorkflowStep): WorkflowStep {
 
   if (legacyType === 'user') {
     // Fixed-person steps had no seniority policy attached. Fall back to an
-    // organisation-wide, no-floor policy — the "more senior than initiator"
-    // rule still applies at runtime. Admins should review these steps.
+    // organisation-wide, no-floor policy. Admins should review these steps.
     departmentScope = 'organisation'
     minJobLevel = 'staff'
   } else if (step.departmentScope === 'initiator') {
@@ -208,7 +207,7 @@ export function formatStepPolicyLabel(
   getLabel: (level: JobLevel) => string,
   options?: FormatStepPolicyLabelOptions
 ): string {
-  const levelLabel = `${getLabel(step.minJobLevel)} or above`
+  const levelLabel = `${getLabel(step.minJobLevel)} and above`
 
   if (step.departmentScope === 'initiator') {
     const initiatorDept =

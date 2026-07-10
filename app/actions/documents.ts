@@ -159,14 +159,18 @@ export interface DocumentInitiationContext {
     content: TiptapDocument | null
   }
   steps: InitiationStepInfo[]
+  /** Hard blockers (e.g. missing department) that prevent assigning approvers. */
   blockingError?: string
+  /** Soft warnings when a step has no eligible people — those steps can be left empty and skipped. */
+  shortageWarnings?: string[]
 }
 
 /**
  * Loads everything the initiation UI needs: the active workflow steps (after
  * applying conditions) and, for each, the pool of people eligible to approve
- * it given who's initiating. Computed server-side so the client never has to
- * be trusted with eligibility logic.
+ * it. Pools follow the admin-set minimum job level and department scope — they
+ * do not change with the initiator's seniority. Empty pools are soft warnings;
+ * those steps can be left blank and skipped at submit time.
  *
  * `formData` should be the values collected so far in the "fill in details"
  * wizard step — workflow steps can be conditional on field values, so the
@@ -271,23 +275,30 @@ export async function getDocumentInitiationContext(
     eligibleApprovers: getEligibleApprovers(step, initiator, users),
   }))
 
-  const blockingStepIndex = steps.findIndex((step) => step.eligibleApprovers.length === 0)
-  const blockingStep = blockingStepIndex >= 0 ? steps[blockingStepIndex] : undefined
-  const blockingError = blockingStep
-    ? buildStepApproverShortageMessage({
-        stepNumber: blockingStep.stepNumber,
-        step: activeSteps[blockingStepIndex],
-        initiator,
-        users,
-        departmentName: initiatorDepartmentName,
-        policyLabel: blockingStep.policyLabel,
-      })
-    : undefined
+  // Empty pools are not blocking — the initiator can leave those steps empty
+  // and skip them. Surface a soft warning so they know why the list is empty.
+  const shortageWarnings = steps
+    .map((step, index) =>
+      step.eligibleApprovers.length === 0
+        ? buildStepApproverShortageMessage({
+            stepNumber: step.stepNumber,
+            step: activeSteps[index],
+            initiator,
+            users,
+            departmentName:
+              activeSteps[index].departmentScope === 'fixed' && activeSteps[index].assigneeDepartmentId
+                ? (departmentsById.get(activeSteps[index].assigneeDepartmentId)?.name ?? null)
+                : initiatorDepartmentName,
+            policyLabel: step.policyLabel,
+          })
+        : null
+    )
+    .filter((message): message is string => Boolean(message))
 
   return {
     template: templateInfo,
     steps,
-    blockingError,
+    shortageWarnings: shortageWarnings.length > 0 ? shortageWarnings : undefined,
   }
 }
 
@@ -350,7 +361,7 @@ export async function createDocumentFromTemplate(input: {
       department_id: profile.department_id,
       job_level: isJobLevel(profile.job_level) ? profile.job_level : ('staff' as JobLevel),
     },
-    assignments: input.assignments ?? [],
+    assignments: (input.assignments ?? []).filter((assignment) => Boolean(assignment.userId)),
     users,
     formData,
   })

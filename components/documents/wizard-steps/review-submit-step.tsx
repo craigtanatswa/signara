@@ -132,13 +132,20 @@ export function ReviewSubmitStep({
           {steps.map((step) => {
             const approverId = assignments[step.workflowStepId]
             const approverName = approverId ? approverNamesById.get(approverId) : undefined
+            const isSkipped = !approverId
             return (
               <li key={step.workflowStepId} className="flex items-center gap-2 py-2 text-sm text-signara-navy">
-                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-signara-navy text-xs font-semibold text-white">
+                <span
+                  className={
+                    isSkipped
+                      ? 'flex size-6 shrink-0 items-center justify-center rounded-full bg-signara-steel/30 text-xs font-semibold text-signara-steel'
+                      : 'flex size-6 shrink-0 items-center justify-center rounded-full bg-signara-navy text-xs font-semibold text-white'
+                  }
+                >
                   {step.stepNumber + 1}
                 </span>
                 <UserIcon className="size-3.5 text-signara-steel" />
-                <span className="font-medium">{approverName ?? 'Not assigned'}</span>
+                <span className="font-medium">{isSkipped ? 'Skipped' : (approverName ?? 'Not assigned')}</span>
                 <span className="text-signara-steel">({step.policyLabel})</span>
               </li>
             )

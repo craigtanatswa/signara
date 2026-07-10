@@ -56,6 +56,7 @@ export default async function StartDocumentPage({ params }: StartDocumentPagePro
             organisationBranding={organisationBranding}
             initialSteps={context.steps}
             initialBlockingError={context.blockingError}
+            initialShortageWarnings={context.shortageWarnings}
           />
         </div>
       </DashboardPageBody>

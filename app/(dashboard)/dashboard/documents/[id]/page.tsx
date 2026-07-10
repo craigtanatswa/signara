@@ -289,7 +289,7 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
                         {(meta.resolvedDepartmentName || meta.minJobLevel) && (
                           <p className="mt-1 text-xs text-signara-steel">
                             {meta.resolvedDepartmentName ?? 'Organisation-wide'}
-                            {meta.minJobLevel ? ` · ${JOB_LEVEL_LABELS[meta.minJobLevel]}+` : ''}
+                            {meta.minJobLevel ? ` · ${JOB_LEVEL_LABELS[meta.minJobLevel]} and above` : ''}
                           </p>
                         )}
                         {meta.authorityText && (

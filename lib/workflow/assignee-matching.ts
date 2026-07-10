@@ -2,23 +2,20 @@
 //
 // These warn admins when a step's policy could never be satisfied by anyone
 // currently in the organisation. This is a heuristic check only — the actual
-// eligible pool for a given document also depends on the initiator (see
-// lib/approval/eligibility.ts), which isn't known at template design time.
+// eligible pool for a given document also depends on department scope relative
+// to the initiator (see lib/approval/eligibility.ts), which isn't fully known
+// at template design time.
 
 import { userBelongsToDepartment } from '@/lib/org-structure/overseen-departments'
-import { JOB_LEVEL_LABELS, JOB_LEVEL_RANK, type DepartmentOption, type JobLevel } from '@/types/org-structure'
+import { JOB_LEVEL_LABELS, meetsStepMinimumJobLevel, type DepartmentOption, type JobLevel } from '@/types/org-structure'
 import type { OrganisationUserOption, Workflow, WorkflowStep } from '@/types/workflow'
-
-function meetsMinimumLevel(userLevel: JobLevel, minLevel: JobLevel): boolean {
-  return JOB_LEVEL_RANK[userLevel] <= JOB_LEVEL_RANK[minLevel]
-}
 
 export function countPotentialAssignees(
   step: WorkflowStep,
   users: OrganisationUserOption[]
 ): number {
   return users.filter((user) => {
-    if (!meetsMinimumLevel(user.job_level, step.minJobLevel)) return false
+    if (!meetsStepMinimumJobLevel(user.job_level, step.minJobLevel)) return false
     if (step.departmentScope === 'fixed') {
       return userBelongsToDepartment(user, step.assigneeDepartmentId)
     }
@@ -62,7 +59,7 @@ export function validateWorkflowAssigneeCoverage(
           ? (departmentsById.get(step.assigneeDepartmentId ?? '')?.name ?? 'the selected department')
           : 'your organisation'
       warnings.push(
-        `${position} has no one in ${scopeLabel} at ${JOB_LEVEL_LABELS[step.minJobLevel]} level or above yet.`
+        `${position} has no one in ${scopeLabel} at ${JOB_LEVEL_LABELS[step.minJobLevel]} or above yet.`
       )
     }
   })

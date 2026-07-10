@@ -3,12 +3,12 @@ import type { OrganisationUserOption, TemplateFieldOption, Workflow } from '@/ty
 import { validateWorkflowAssigneeCoverage } from '@/lib/workflow/assignee-matching'
 
 export const SELF_APPROVAL_NOTE =
-  'Note: the person who initiates a document cannot also approve it at any step, and every approver must be more senior than the initiator. This is enforced automatically when documents are created from this template.'
+  'Note: the person who initiates a document cannot also approve it at any step. Approver options follow this template’s department and minimum job-level settings, and are the same for every initiator in a given department.'
 
 /**
- * Design-time validation only. Self-approval and initiator seniority cannot
- * be checked here because the initiator differs per document instance —
- * that check runs when a document is created from this template.
+ * Design-time validation only. Self-approval cannot be checked here because
+ * the initiator differs per document instance — that check runs when a
+ * document is created from this template.
  */
 export function validateWorkflow(
   workflow: Workflow,

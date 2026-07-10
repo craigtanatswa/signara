@@ -13,11 +13,14 @@ import {
 } from '@/components/ui/select'
 import type { InitiationStepInfo } from '@/app/actions/documents'
 
+const SKIP_VALUE = '__skip__'
+
 interface AssignApproversStepProps {
   steps: InitiationStepInfo[]
   assignments: Record<string, string>
-  onChange: (workflowStepId: string, userId: string) => void
+  onChange: (workflowStepId: string, userId: string | null) => void
   blockingError?: string
+  shortageWarnings?: string[]
   isLoading?: boolean
 }
 
@@ -26,6 +29,7 @@ export function AssignApproversStep({
   assignments,
   onChange,
   blockingError,
+  shortageWarnings,
   isLoading,
 }: AssignApproversStepProps) {
   const usedApproverIds = useMemo(() => new Set(Object.values(assignments)), [assignments])
@@ -41,14 +45,26 @@ export function AssignApproversStep({
   return (
     <div className="space-y-4">
       <p className="text-sm text-signara-steel">
-        Choose an approver for each step below. Every approver must be more senior than you, and
-        the chain runs in order — the next approver is notified once the previous one signs.
+        Choose an approver for each step from the options set by the admin approval flow. Options
+        are based on department and minimum job level. If no one is available for a step, leave it
+        empty to skip that step — you&apos;ll be asked to confirm before submitting.
       </p>
 
       {blockingError && (
         <Alert className="border-amber-200 bg-amber-50 text-amber-800">
           <TriangleAlert />
           <AlertDescription className="text-amber-800">{blockingError}</AlertDescription>
+        </Alert>
+      )}
+
+      {shortageWarnings && shortageWarnings.length > 0 && !blockingError && (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-800">
+          <TriangleAlert />
+          <AlertDescription className="space-y-1 text-amber-800">
+            {shortageWarnings.map((warning) => (
+              <p key={warning}>{warning}</p>
+            ))}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -85,17 +101,20 @@ export function AssignApproversStep({
                 <Label className="text-signara-navy font-medium">Approver</Label>
                 {step.eligibleApprovers.length === 0 ? (
                   <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                    No one is eligible to approve this step for you.
+                    No one is eligible for this step. Leave it empty to skip it.
                   </p>
                 ) : (
                   <Select
-                    value={selectedId}
-                    onValueChange={(value) => onChange(step.workflowStepId, value)}
+                    value={selectedId || SKIP_VALUE}
+                    onValueChange={(value) =>
+                      onChange(step.workflowStepId, value === SKIP_VALUE ? null : value)
+                    }
                   >
                     <SelectTrigger className="w-full border-signara-steel focus:ring-signara-navy">
                       <SelectValue placeholder="Select an approver" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value={SKIP_VALUE}>Skip this step</SelectItem>
                       {options.map((approver) => (
                         <SelectItem key={approver.id} value={approver.id}>
                           {approver.full_name}

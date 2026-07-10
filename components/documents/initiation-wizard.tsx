@@ -10,6 +10,14 @@ import {
   type InitiationStepInfo,
 } from '@/app/actions/documents'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { ErrorMessage } from '@/components/ui/error-message'
 import { listTemplateFieldsWithRoles } from '@/lib/tiptap/field-utils'
 import { isFillDetailsField } from '@/lib/tiptap/field-schema'
@@ -35,6 +43,7 @@ interface InitiationWizardProps {
   organisationBranding?: OrganisationBranding | null
   initialSteps: InitiationStepInfo[]
   initialBlockingError?: string
+  initialShortageWarnings?: string[]
 }
 
 export function InitiationWizard({
@@ -44,6 +53,7 @@ export function InitiationWizard({
   organisationBranding = null,
   initialSteps,
   initialBlockingError,
+  initialShortageWarnings,
 }: InitiationWizardProps) {
   const router = useRouter()
   const [draftId] = useState(() => crypto.randomUUID())
@@ -52,8 +62,10 @@ export function InitiationWizard({
   const [steps, setSteps] = useState<InitiationStepInfo[]>(initialSteps)
   const [assignments, setAssignments] = useState<Record<string, string>>({})
   const [blockingError, setBlockingError] = useState<string | undefined>(initialBlockingError)
+  const [shortageWarnings, setShortageWarnings] = useState<string[]>(initialShortageWarnings ?? [])
   const [title, setTitle] = useState(`${templateName} — ${new Date().toLocaleDateString('en-GB')}`)
   const [serverError, setServerError] = useState<string | null>(null)
+  const [emptyStepsWarningOpen, setEmptyStepsWarningOpen] = useState(false)
   const [isRefreshingSteps, startRefreshTransition] = useTransition()
   const [isSubmitting, startSubmitTransition] = useTransition()
 
@@ -66,8 +78,14 @@ export function InitiationWizard({
 
   const currentStepKey: WizardStepKey = WIZARD_STEPS[currentStepIndex].key
 
-  const canContinueApprovers =
-    steps.length > 0 && !blockingError && steps.every((step) => Boolean(assignments[step.workflowStepId]))
+  const emptyApproverSteps = useMemo(
+    () => steps.filter((step) => !assignments[step.workflowStepId]),
+    [steps, assignments]
+  )
+
+  const hasAtLeastOneApprover = steps.some((step) => Boolean(assignments[step.workflowStepId]))
+
+  const canContinueApprovers = steps.length > 0 && !blockingError && hasAtLeastOneApprover
 
   async function handleContinue() {
     setServerError(null)
@@ -90,10 +108,12 @@ export function InitiationWizard({
       const context = await getDocumentInitiationContext(templateId, values)
       if ('error' in context) {
         setBlockingError(context.error)
+        setShortageWarnings([])
         setSteps([])
       } else {
         setSteps(context.steps)
         setBlockingError(context.blockingError ?? undefined)
+        setShortageWarnings(context.shortageWarnings ?? [])
         setAssignments((prev) => {
           const validIds = new Set(context.steps.map((step) => step.workflowStepId))
           return Object.fromEntries(Object.entries(prev).filter(([stepId]) => validIds.has(stepId)))
@@ -103,21 +123,30 @@ export function InitiationWizard({
     })
   }
 
-  function handleAssignmentChange(workflowStepId: string, userId: string) {
-    setAssignments((prev) => ({ ...prev, [workflowStepId]: userId }))
+  function handleAssignmentChange(workflowStepId: string, userId: string | null) {
+    setAssignments((prev) => {
+      if (!userId) {
+        const next = { ...prev }
+        delete next[workflowStepId]
+        return next
+      }
+      return { ...prev, [workflowStepId]: userId }
+    })
   }
 
-  function handleSubmit() {
+  function submitDocument() {
     setServerError(null)
     startSubmitTransition(async () => {
       const result = await createDocumentFromTemplate({
         templateId,
         title,
         data: formValues,
-        assignments: steps.map((step) => ({
-          workflowStepId: step.workflowStepId,
-          userId: assignments[step.workflowStepId],
-        })),
+        assignments: steps
+          .filter((step) => Boolean(assignments[step.workflowStepId]))
+          .map((step) => ({
+            workflowStepId: step.workflowStepId,
+            userId: assignments[step.workflowStepId],
+          })),
       })
 
       if ('error' in result) {
@@ -129,6 +158,19 @@ export function InitiationWizard({
       router.push(`/dashboard/documents/${result.documentId}`)
       router.refresh()
     })
+  }
+
+  function handleSubmit() {
+    if (emptyApproverSteps.length > 0) {
+      setEmptyStepsWarningOpen(true)
+      return
+    }
+    submitDocument()
+  }
+
+  function handleConfirmEmptySteps() {
+    setEmptyStepsWarningOpen(false)
+    submitDocument()
   }
 
   const approverNamesById = useMemo(() => {
@@ -173,6 +215,7 @@ export function InitiationWizard({
             assignments={assignments}
             onChange={handleAssignmentChange}
             blockingError={blockingError}
+            shortageWarnings={shortageWarnings}
             isLoading={isRefreshingSteps}
           />
         )}
@@ -215,6 +258,53 @@ export function InitiationWizard({
           </div>
         </div>
       )}
+
+      <Dialog open={emptyStepsWarningOpen} onOpenChange={setEmptyStepsWarningOpen}>
+        <DialogContent className="border-signara-steel/30 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-signara-navy">Empty approval steps</DialogTitle>
+            <DialogDescription className="text-signara-steel">
+              {emptyApproverSteps.length === 1
+                ? 'One approval step has no approver selected and will be skipped.'
+                : `${emptyApproverSteps.length} approval steps have no approver selected and will be skipped.`}{' '}
+              You can go back to assign someone, or continue and submit without those steps.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-signara-navy">
+            {emptyApproverSteps.map((step) => (
+              <li key={step.workflowStepId}>
+                Step {step.stepNumber}
+                {step.policyLabel ? ` — ${step.policyLabel}` : ''}
+              </li>
+            ))}
+          </ul>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-signara-navy text-signara-navy"
+              onClick={() => setEmptyStepsWarningOpen(false)}
+            >
+              Go back
+            </Button>
+            <Button
+              type="button"
+              variant="signara"
+              disabled={isSubmitting}
+              onClick={handleConfirmEmptySteps}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Submitting…
+                </>
+              ) : (
+                'Continue anyway'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
