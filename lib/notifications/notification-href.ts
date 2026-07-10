@@ -1,17 +1,73 @@
-/** Routes opened when a notification is clicked. */
-export function getNotificationHref(type: string, documentId?: string | null): string | null {
-  switch (type) {
-    case 'template_request':
-    case 'template_request_fulfilled':
-    case 'template_request_dismissed':
-      return '/dashboard/requests'
+/** Known in-app notification types. */
+export type NotificationType =
+  | 'welcome'
+  | 'approval_required'
+  | 'document_completed'
+  | 'document_rejected'
+  | 'template_request'
+  | 'template_request_fulfilled'
+  | 'template_request_dismissed'
+
+export interface NotificationAction {
+  href: string
+  label: string
+}
+
+/** Primary CTA for a notification — label + destination. */
+export function getNotificationAction(
+  type: string,
+  documentId?: string | null
+): NotificationAction | null {
+  switch (type as NotificationType | string) {
     case 'approval_required':
+      return {
+        href: documentId ? `/dashboard/documents/${documentId}` : '/dashboard/documents',
+        label: 'Review & approve',
+      }
     case 'document_completed':
+      return {
+        href: documentId ? `/dashboard/documents/${documentId}` : '/dashboard/documents',
+        label: 'View document',
+      }
     case 'document_rejected':
-      return documentId ? `/dashboard/documents/${documentId}` : '/dashboard/documents'
+      return {
+        href: documentId ? `/dashboard/documents/${documentId}` : '/dashboard/documents',
+        label: 'View rejection',
+      }
+    case 'template_request':
+      return {
+        href: '/dashboard/requests',
+        label: 'Review request',
+      }
+    case 'template_request_fulfilled':
+      return {
+        href: '/dashboard/requests',
+        label: 'View request',
+      }
+    case 'template_request_dismissed':
+      return {
+        href: '/dashboard/requests',
+        label: 'View request',
+      }
     case 'welcome':
-      return '/dashboard'
+      return {
+        href: '/dashboard/documents/new',
+        label: 'Start a document',
+      }
     default:
       return null
   }
+}
+
+/** Routes opened when a notification is clicked. */
+export function getNotificationHref(type: string, documentId?: string | null): string | null {
+  return getNotificationAction(type, documentId)?.href ?? null
+}
+
+export function isTemplateRequestNotification(type: string): boolean {
+  return (
+    type === 'template_request' ||
+    type === 'template_request_fulfilled' ||
+    type === 'template_request_dismissed'
+  )
 }

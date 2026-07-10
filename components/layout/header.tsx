@@ -1,10 +1,12 @@
 'use client'
 
 import { Bell, CheckCheck, ExternalLink } from 'lucide-react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { getNotificationHref } from '@/lib/notifications/notification-href'
+import { getNotificationAction } from '@/lib/notifications/notification-href'
+import { timeAgo } from '@/lib/notifications/notification-meta'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -20,25 +22,6 @@ import type { User, Notification } from '@/types/database'
 interface HeaderProps {
   pageTitle: string
   user: User
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
-
-function isTemplateRequestNotification(type: string): boolean {
-  return (
-    type === 'template_request' ||
-    type === 'template_request_fulfilled' ||
-    type === 'template_request_dismissed'
-  )
 }
 
 export function Header({ pageTitle, user }: HeaderProps) {
@@ -134,10 +117,10 @@ export function Header({ pageTitle, user }: HeaderProps) {
 
   async function handleNotificationClick(notification: Notification) {
     await markNotificationRead(notification)
-    const href = getNotificationHref(notification.type, notification.document_id)
+    const action = getNotificationAction(notification.type, notification.document_id)
     setBellOpen(false)
-    if (href) {
-      router.push(href)
+    if (action) {
+      router.push(action.href)
     }
   }
 
@@ -196,8 +179,10 @@ export function Header({ pageTitle, user }: HeaderProps) {
             ) : (
               <ul className="divide-y divide-border">
                 {notifications.map((notification) => {
-                  const href = getNotificationHref(notification.type, notification.document_id)
-                  const openRequestsLabel = isTemplateRequestNotification(notification.type)
+                  const action = getNotificationAction(
+                    notification.type,
+                    notification.document_id
+                  )
 
                   return (
                     <li
@@ -237,9 +222,9 @@ export function Header({ pageTitle, user }: HeaderProps) {
                           <p className="text-[10px] text-signara-steel/50">
                             {timeAgo(notification.created_at)}
                           </p>
-                          {href && (
+                          {action && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-medium text-signara-gold">
-                              {openRequestsLabel ? 'Open requests' : 'Open'}
+                              {action.label}
                               <ExternalLink className="size-2.5" />
                             </span>
                           )}
@@ -250,6 +235,16 @@ export function Header({ pageTitle, user }: HeaderProps) {
                 })}
               </ul>
             )}
+
+            <div className="border-t border-border px-4 py-2.5">
+              <Link
+                href="/dashboard/notifications"
+                onClick={() => setBellOpen(false)}
+                className="flex w-full items-center justify-center text-xs font-semibold text-signara-navy hover:text-signara-gold transition-colors"
+              >
+                View all notifications
+              </Link>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
 
