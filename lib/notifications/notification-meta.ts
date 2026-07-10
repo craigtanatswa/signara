@@ -28,6 +28,8 @@ export function getNotificationIcon(type: string): LucideIcon {
   switch (type) {
     case 'approval_required':
       return PenLine
+    case 'approval_assignment_needed':
+      return Inbox
     case 'document_completed':
       return CheckCircle2
     case 'document_rejected':

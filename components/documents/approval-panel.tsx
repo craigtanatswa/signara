@@ -3,8 +3,9 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
+import { CheckCircle2, Loader2, MessageSquarePlus, XCircle } from 'lucide-react'
 import { approveDocumentStep, rejectDocumentStep } from '@/app/actions/approvals'
+import { saveSignatureForFutureUse } from '@/lib/signatures/save-for-future-use'
 import { SignaturePad } from '@/components/documents/signature-pad'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -18,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import type { SignatureCaptureMethod } from '@/types/database'
 
 interface ApprovalPanelProps {
   documentId: string
@@ -29,12 +31,14 @@ interface ApprovalPanelProps {
 export function ApprovalPanel({ documentId, stepId, authorityText, requiresSignature }: ApprovalPanelProps) {
   const router = useRouter()
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null)
+  const [signatureMethod, setSignatureMethod] = useState<SignatureCaptureMethod>('draw')
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   const canApprove = !requiresSignature || Boolean(signatureDataUrl)
+  const rejectReasonValid = rejectReason.trim().length >= 10
 
   function handleApprove() {
     setError(null)
@@ -44,6 +48,7 @@ export function ApprovalPanel({ documentId, stepId, authorityText, requiresSigna
         setError(result.error)
         return
       }
+      await saveSignatureForFutureUse(signatureDataUrl, signatureMethod)
       toast.success('Approved')
       router.refresh()
     })
@@ -51,6 +56,10 @@ export function ApprovalPanel({ documentId, stepId, authorityText, requiresSigna
 
   function handleReject() {
     setError(null)
+    if (!rejectReasonValid) {
+      setError('Please provide a reason of at least 10 characters.')
+      return
+    }
     startTransition(async () => {
       const result = await rejectDocumentStep({ documentId, stepId, reason: rejectReason })
       if (result.error) {
@@ -65,12 +74,19 @@ export function ApprovalPanel({ documentId, stepId, authorityText, requiresSigna
 
   return (
     <div className="rounded-lg border border-signara-gold/40 bg-signara-gold/5 p-5">
-      <p className="text-sm font-semibold text-signara-navy">Your approval is needed</p>
+      <p className="text-sm font-semibold text-signara-navy">
+        This document is waiting for your approval
+      </p>
       {authorityText && <p className="mt-1 text-sm text-signara-navy/80">{authorityText}</p>}
 
       {requiresSignature && (
         <div className="mt-4">
-          <SignaturePad onChange={setSignatureDataUrl} />
+          <SignaturePad
+            onChange={(dataUrl, method) => {
+              setSignatureDataUrl(dataUrl)
+              if (method) setSignatureMethod(method)
+            }}
+          />
         </div>
       )}
 
@@ -80,7 +96,7 @@ export function ApprovalPanel({ documentId, stepId, authorityText, requiresSigna
         </div>
       )}
 
-      <div className="mt-4 flex items-center gap-3">
+      <div className="mt-4 flex flex-wrap items-center gap-3">
         <Button
           type="button"
           variant="signara"
@@ -92,17 +108,24 @@ export function ApprovalPanel({ documentId, stepId, authorityText, requiresSigna
           ) : (
             <CheckCircle2 className="mr-1.5 size-4" />
           )}
-          Approve
+          Approve & Sign
         </Button>
         <Button
           type="button"
           variant="outline"
           disabled={isPending}
-          onClick={() => setRejectOpen(true)}
+          onClick={() => {
+            setError(null)
+            setRejectOpen(true)
+          }}
           className="border-destructive text-destructive hover:bg-destructive hover:text-white"
         >
           <XCircle className="mr-1.5 size-4" />
           Reject
+        </Button>
+        <Button type="button" variant="outline" disabled title="Coming soon">
+          <MessageSquarePlus className="mr-1.5 size-4" />
+          Request consultation
         </Button>
       </div>
 
@@ -117,7 +140,7 @@ export function ApprovalPanel({ documentId, stepId, authorityText, requiresSigna
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor="reject-reason" className="text-signara-navy font-medium">
-              Reason
+              Reason <span className="text-signara-steel font-normal">(min. 10 characters)</span>
             </Label>
             <Textarea
               id="reject-reason"
@@ -134,7 +157,7 @@ export function ApprovalPanel({ documentId, stepId, authorityText, requiresSigna
             <Button
               variant="destructive"
               onClick={handleReject}
-              disabled={isPending || !rejectReason.trim()}
+              disabled={isPending || !rejectReasonValid}
             >
               {isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
               Reject document

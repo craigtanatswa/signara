@@ -3,12 +3,14 @@
 import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Loader2, PlayCircle, XCircle } from 'lucide-react'
+import { Loader2, PlayCircle, RotateCcw, XCircle } from 'lucide-react'
 import {
   cancelDocument,
+  resubmitDocument,
   saveInitiatorSignature,
   submitDocumentForApproval,
 } from '@/app/actions/documents'
+import { saveSignatureForFutureUse } from '@/lib/signatures/save-for-future-use'
 import { SignaturePad } from '@/components/documents/signature-pad'
 import { Button } from '@/components/ui/button'
 import { ErrorMessage } from '@/components/ui/error-message'
@@ -18,7 +20,8 @@ interface InitiatorDocumentPanelProps {
   documentId: string
   initiatorFieldLabel: string | null
   existingSignature: string | null
-  mode: 'draft' | 'submitted' | 'cancel-only'
+  mode: 'draft' | 'submitted' | 'cancel-only' | 'rejected'
+  rejectionReason?: string | null
 }
 
 export function InitiatorDocumentPanel({
@@ -26,9 +29,11 @@ export function InitiatorDocumentPanel({
   initiatorFieldLabel,
   existingSignature,
   mode,
+  rejectionReason,
 }: InitiatorDocumentPanelProps) {
   const router = useRouter()
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(existingSignature)
+  const [signatureMethod, setSignatureMethod] = useState<SignatureCaptureMethod>('draw')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -78,6 +83,7 @@ export function InitiatorDocumentPanel({
         setError(result.error)
         return
       }
+      await saveSignatureForFutureUse(signatureDataUrl, signatureMethod)
       toast.success('Document submitted for approval')
       router.refresh()
     })
@@ -94,6 +100,60 @@ export function InitiatorDocumentPanel({
       toast.success('Document cancelled')
       router.refresh()
     })
+  }
+
+  function handleResubmit() {
+    setError(null)
+    startTransition(async () => {
+      const result = await resubmitDocument(documentId)
+      if (result.error) {
+        setError(result.error)
+        return
+      }
+      toast.success('Document reopened as a draft — make your changes, then submit again')
+      router.refresh()
+    })
+  }
+
+  if (mode === 'rejected') {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-5">
+        <p className="text-sm font-semibold text-red-900">This document was rejected</p>
+        {rejectionReason && (
+          <p className="mt-2 rounded-md border border-red-200 bg-white/70 px-3 py-2 text-sm text-red-900">
+            Reason: {rejectionReason}
+          </p>
+        )}
+        <p className="mt-2 text-sm text-red-800/80">
+          Make any needed changes, then resubmit to restart the approval chain from the first step.
+        </p>
+        {error && (
+          <div className="mt-3">
+            <ErrorMessage>{error}</ErrorMessage>
+          </div>
+        )}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button type="button" variant="signara" disabled={isPending} onClick={handleResubmit}>
+            {isPending ? (
+              <Loader2 className="mr-1.5 size-4 animate-spin" />
+            ) : (
+              <RotateCcw className="mr-1.5 size-4" />
+            )}
+            Make changes and resubmit
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isPending}
+            onClick={handleCancel}
+            className="border-destructive text-destructive hover:bg-destructive hover:text-white"
+          >
+            <XCircle className="mr-1.5 size-4" />
+            Cancel document
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   if (mode === 'cancel-only' || mode === 'submitted') {
@@ -148,7 +208,10 @@ export function InitiatorDocumentPanel({
           <SignaturePad
             label={initiatorFieldLabel}
             value={signatureDataUrl}
-            onChange={setSignatureDataUrl}
+            onChange={(dataUrl, method) => {
+              setSignatureDataUrl(dataUrl)
+              if (method) setSignatureMethod(method)
+            }}
             onSave={handleSaveToDocument}
           />
           {hasSavedSignature && !hasUnsavedSignature && (

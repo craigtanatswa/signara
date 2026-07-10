@@ -1,3 +1,5 @@
+import { scaleSignatureDataUrl } from '@/lib/signatures/scale-signature'
+
 /**
  * Client-side signature image cleanup: remove paper/scan backgrounds and
  * produce a transparent PNG cropped tightly around the ink.
@@ -201,5 +203,5 @@ export async function processSignatureUpload(file: File): Promise<string> {
 
   ctx.putImageData(imageData, 0, 0)
   const trimmed = trimTransparent(canvas)
-  return trimmed.toDataURL('image/png')
+  return scaleSignatureDataUrl(trimmed.toDataURL('image/png'))
 }

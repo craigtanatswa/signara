@@ -200,6 +200,17 @@ export async function deleteUserSignature(
 ): Promise<{ error?: string }> {
   const { supabase, userId } = await getAuthenticatedUserId()
 
+  const { data: existing } = await supabase
+    .from('user_signatures')
+    .select('id, is_default')
+    .eq('id', signatureId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (!existing) {
+    return { error: 'Signature not found.' }
+  }
+
   const { error } = await supabase
     .from('user_signatures')
     .delete()
@@ -208,6 +219,25 @@ export async function deleteUserSignature(
 
   if (error) {
     return { error: error.message }
+  }
+
+  // If the default was deleted, promote the newest remaining signature.
+  if (existing.is_default) {
+    const { data: nextDefault } = await supabase
+      .from('user_signatures')
+      .select('id')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (nextDefault) {
+      await supabase
+        .from('user_signatures')
+        .update({ is_default: true, updated_at: new Date().toISOString() })
+        .eq('id', nextDefault.id)
+        .eq('user_id', userId)
+    }
   }
 
   revalidatePath('/dashboard/settings/profile')

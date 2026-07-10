@@ -1,18 +1,23 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/header'
 import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
 import { Button } from '@/components/ui/button'
 import { DocumentsTabs, type DocumentRow, type AwaitingDocumentRow } from '@/components/documents/documents-tabs'
 import { Plus } from 'lucide-react'
-import type { User, Document, DocumentStep } from '@/types/database'
+import {
+  loadAwaitingApprovalsForUser,
+  loadInitiatedDocuments,
+  loadOrganisationDocuments,
+  loadStepProgressByDocument,
+  loadUserNamesById,
+  type DocumentListRow,
+} from '@/lib/documents/load-for-viewer'
+import type { User, DocumentStep } from '@/types/database'
 
-type DocumentQueryRow = Pick<Document, 'id' | 'title' | 'status' | 'created_at' | 'initiated_by'> & {
-  templates: { name: string } | { name: string }[] | null
-}
-
-function getTemplateName(templates: DocumentQueryRow['templates']): string {
+function getTemplateName(templates: DocumentListRow['templates']): string {
   const template = Array.isArray(templates) ? templates[0] : templates
   return template?.name ?? 'Unknown template'
 }
@@ -43,87 +48,43 @@ export default async function DocumentsPage() {
 
   const user = profile as User
   const isAdmin = user.role === 'admin'
+  const admin = createAdminClient()
 
-  const [{ data: myDocsRaw }, { data: awaitingStepsRaw }, allDocsResult] = await Promise.all([
-    supabase
-      .from('documents')
-      .select('id, title, status, created_at, initiated_by, templates(name)')
-      .eq('organisation_id', user.organisation_id)
-      .eq('initiated_by', user.id)
-      .order('created_at', { ascending: false })
-      .limit(100),
-    supabase
-      .from('document_steps')
-      .select(
-        'id, document_id, signature_field_id, documents!inner(id, title, status, created_at, initiated_by, organisation_id, templates(name))'
-      )
-      .eq('assignee_user_id', user.id)
-      .eq('status', 'pending')
-      .eq('documents.organisation_id', user.organisation_id),
-    isAdmin
-      ? supabase
-          .from('documents')
-          .select('id, title, status, created_at, initiated_by, templates(name)')
-          .eq('organisation_id', user.organisation_id)
-          .order('created_at', { ascending: false })
-          .limit(100)
-      : Promise.resolve({ data: null }),
+  // Service-role reads: member RLS typically only lets users see documents they
+  // initiated, which would hide "Awaiting my action" from assignees.
+  const [myDocs, awaitingRows, allDocs] = await Promise.all([
+    loadInitiatedDocuments(admin, {
+      userId: user.id,
+      organisationId: user.organisation_id,
+    }),
+    loadAwaitingApprovalsForUser({
+      userId: user.id,
+      organisationId: user.organisation_id,
+    }),
+    isAdmin ? loadOrganisationDocuments(admin, user.organisation_id) : Promise.resolve(null),
   ])
-
-  const myDocs = (myDocsRaw ?? []) as DocumentQueryRow[]
-  const awaitingDocs = (awaitingStepsRaw ?? [])
-    .map((row) => {
-      const doc = Array.isArray(row.documents) ? row.documents[0] : row.documents
-      if (!doc) return null
-      return {
-        doc: doc as DocumentQueryRow,
-        stepId: row.id as string,
-        requiresSignature: Boolean(row.signature_field_id),
-      }
-    })
-    .filter((item): item is { doc: DocumentQueryRow; stepId: string; requiresSignature: boolean } =>
-      Boolean(item)
-    )
-
-  const allDocs = allDocsResult.data as DocumentQueryRow[] | null
 
   const allIds = Array.from(
     new Set([
-      ...myDocs,
-      ...awaitingDocs.map((item) => item.doc),
-      ...(allDocs ?? []),
-    ].map((doc) => doc.id))
+      ...myDocs.map((doc) => doc.id),
+      ...awaitingRows.map((row) => row.documentId),
+      ...(allDocs ?? []).map((doc) => doc.id),
+    ])
   )
   const initiatorIds = Array.from(
     new Set([
-      ...myDocs,
-      ...awaitingDocs.map((item) => item.doc),
-      ...(allDocs ?? []),
-    ].map((doc) => doc.initiated_by))
+      ...myDocs.map((doc) => doc.initiated_by),
+      ...awaitingRows.map((row) => row.document.initiated_by),
+      ...(allDocs ?? []).map((doc) => doc.initiated_by),
+    ])
   )
 
-  const [{ data: stepsData }, { data: initiatorsData }] = await Promise.all([
-    allIds.length > 0
-      ? supabase.from('document_steps').select('document_id, step_order, status').in('document_id', allIds)
-      : Promise.resolve({ data: [] }),
-    initiatorIds.length > 0
-      ? supabase.from('users').select('id, full_name').in('id', initiatorIds)
-      : Promise.resolve({ data: [] }),
+  const [stepsByDocument, initiatorNameById] = await Promise.all([
+    loadStepProgressByDocument(admin, allIds),
+    loadUserNamesById(admin, initiatorIds),
   ])
 
-  const stepsByDocument = new Map<string, Pick<DocumentStep, 'step_order' | 'status'>[]>()
-  for (const step of stepsData ?? []) {
-    const list = stepsByDocument.get(step.document_id) ?? []
-    list.push(step)
-    stepsByDocument.set(step.document_id, list)
-  }
-  for (const list of stepsByDocument.values()) {
-    list.sort((a, b) => a.step_order - b.step_order)
-  }
-
-  const initiatorNameById = new Map((initiatorsData ?? []).map((row) => [row.id, row.full_name]))
-
-  function toRow(doc: DocumentQueryRow): DocumentRow {
+  function toRow(doc: DocumentListRow): DocumentRow {
     return {
       id: doc.id,
       title: doc.title,
@@ -137,10 +98,10 @@ export default async function DocumentsPage() {
   }
 
   const myDocuments = myDocs.map(toRow)
-  const awaitingMyAction: AwaitingDocumentRow[] = awaitingDocs.map((item) => ({
-    ...toRow(item.doc),
-    stepId: item.stepId,
-    requiresSignature: item.requiresSignature,
+  const awaitingMyAction: AwaitingDocumentRow[] = awaitingRows.map((row) => ({
+    ...toRow(row.document),
+    stepId: row.stepId,
+    requiresSignature: Boolean(row.signatureFieldId),
   }))
   const allDocuments = allDocs ? allDocs.map(toRow) : null
 

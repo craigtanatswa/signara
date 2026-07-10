@@ -141,6 +141,9 @@ export interface Document {
   initiated_by: string
   data: Record<string, unknown> | null
   completed_at: string | null
+  /** Index of the currently active step (legacy / sync column). */
+  current_step?: number | null
+  rejection_reason?: string | null
   created_at: string
   updated_at: string
 }
@@ -159,6 +162,8 @@ export interface DocumentStep {
   /** The template workflow step this was resolved from, for provenance. */
   workflow_step_id: string | null
   notes: string | null
+  /** Last time a deadline reminder email was sent for this pending step. */
+  last_reminder_sent_at?: string | null
   created_at: string
   updated_at: string
 }

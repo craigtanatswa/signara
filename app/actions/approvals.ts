@@ -2,14 +2,25 @@
 
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getActiveStep } from '@/lib/approval/active-step'
 import { parseStepNotes, stringifyStepNotes } from '@/lib/workflow/step-notes'
+import {
+  notifyApproverForStep,
+  notifyDocumentCompleted,
+  notifyDocumentRejected,
+} from '@/lib/workflow/notify-routing'
 import type { Document, DocumentStep } from '@/types/database'
 
 type AdminClient = Awaited<ReturnType<typeof createAdminClient>>
 type AuthProfile = { id: string; organisation_id: string; full_name: string }
+
+const rejectReasonSchema = z
+  .string()
+  .trim()
+  .min(10, 'Please provide a reason of at least 10 characters.')
 
 // These actions perform their own authorisation checks below (organisation
 // match, "you are the assignee of the currently active step", sequential
@@ -66,6 +77,7 @@ async function approveDocumentStepInternal(
     documentId: string
     stepId: string
     signatureDataUrl?: string | null
+    comment?: string | null
   }
 ): Promise<{ error?: string; documentId?: string }> {
   const { document, steps } = await loadDocumentWithSteps(
@@ -92,6 +104,7 @@ async function approveDocumentStepInternal(
     return { error: 'This step is not currently awaiting action.' }
   }
 
+  // Always re-verify assignee server-side — never trust the client UI alone.
   if (step.assignee_user_id !== profile.id) {
     return { error: 'You are not assigned to this step.' }
   }
@@ -100,12 +113,19 @@ async function approveDocumentStepInternal(
     return { error: 'Please provide your signature before approving.' }
   }
 
+  const existingNotes = parseStepNotes(step.notes)
+  const notes =
+    input.comment?.trim()
+      ? stringifyStepNotes({ ...existingNotes, approvalComment: input.comment.trim() })
+      : step.notes
+
   const { error: updateError } = await supabase
     .from('document_steps')
     .update({
       status: 'approved',
       signed_at: new Date().toISOString(),
       signature_url: input.signatureDataUrl ?? null,
+      notes,
       updated_at: new Date().toISOString(),
     })
     .eq('id', step.id)
@@ -122,13 +142,27 @@ async function approveDocumentStepInternal(
       .update({ status: 'pending', updated_at: new Date().toISOString() })
       .eq('id', nextStep.id)
 
-    await supabase.from('notifications').insert({
-      user_id: nextStep.assignee_user_id,
-      document_id: document.id,
-      type: 'approval_required',
-      title: 'Approval required',
-      message: `"${document.title}" needs your approval.`,
-    })
+    // Keep legacy current_step in sync when the column is present.
+    await supabase
+      .from('documents')
+      .update({
+        current_step: nextStep.step_order,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', document.id)
+
+    const { data: initiator } = await supabase
+      .from('users')
+      .select('full_name')
+      .eq('id', document.initiated_by)
+      .maybeSingle()
+
+    // Email + in-app notification — failures must not block advancement.
+    await notifyApproverForStep({
+      document,
+      step: { ...nextStep, status: 'pending' },
+      initiatorName: initiator?.full_name ?? 'A colleague',
+    }).catch((err) => console.error('[approveDocumentStep] notify next', err))
   } else {
     await supabase
       .from('documents')
@@ -139,13 +173,9 @@ async function approveDocumentStepInternal(
       })
       .eq('id', document.id)
 
-    await supabase.from('notifications').insert({
-      user_id: document.initiated_by,
-      document_id: document.id,
-      type: 'document_completed',
-      title: 'Document fully approved',
-      message: `"${document.title}" has been fully approved by everyone in the chain.`,
-    })
+    await notifyDocumentCompleted({ document }).catch((err) =>
+      console.error('[approveDocumentStep] notify complete', err)
+    )
   }
 
   revalidatePath(`/dashboard/documents/${document.id}`)
@@ -156,6 +186,7 @@ export async function approveDocumentStep(input: {
   documentId: string
   stepId: string
   signatureDataUrl?: string | null
+  comment?: string | null
 }) {
   const { supabase, profile } = await getAuthenticatedUser()
   const result = await approveDocumentStepInternal(supabase, profile, input)
@@ -226,11 +257,12 @@ export async function rejectDocumentStep(input: {
   reason: string
 }) {
   const { supabase, profile } = await getAuthenticatedUser()
-  const reason = input.reason.trim()
 
-  if (!reason) {
-    return { error: 'Please provide a reason for rejecting this document.' }
+  const parsed = rejectReasonSchema.safeParse(input.reason)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Invalid rejection reason.' }
   }
+  const reason = parsed.data
 
   const { document, steps } = await loadDocumentWithSteps(
     supabase,
@@ -260,11 +292,16 @@ export async function rejectDocumentStep(input: {
     return { error: 'You are not assigned to this step.' }
   }
 
-  const notes = stringifyStepNotes({ ...parseStepNotes(step.notes), rejectionReason: reason })
+  const rejectedAt = new Date().toISOString()
+  const notes = stringifyStepNotes({
+    ...parseStepNotes(step.notes),
+    rejectionReason: reason,
+    rejectedAt,
+  })
 
   const { error: updateError } = await supabase
     .from('document_steps')
-    .update({ status: 'rejected', notes, updated_at: new Date().toISOString() })
+    .update({ status: 'rejected', notes, updated_at: rejectedAt })
     .eq('id', step.id)
 
   if (updateError) {
@@ -284,16 +321,18 @@ export async function rejectDocumentStep(input: {
 
   await supabase
     .from('documents')
-    .update({ status: 'rejected', updated_at: new Date().toISOString() })
+    .update({
+      status: 'rejected',
+      rejection_reason: reason,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', document.id)
 
-  await supabase.from('notifications').insert({
-    user_id: document.initiated_by,
-    document_id: document.id,
-    type: 'document_rejected',
-    title: 'Document rejected',
-    message: `${profile.full_name} rejected "${document.title}": ${reason}`,
-  })
+  await notifyDocumentRejected({
+    document,
+    rejectedByName: profile.full_name,
+    reason,
+  }).catch((err) => console.error('[rejectDocumentStep] notify', err))
 
   revalidatePath(`/dashboard/documents/${document.id}`)
   revalidatePath('/dashboard/documents')

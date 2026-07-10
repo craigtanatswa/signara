@@ -14,6 +14,9 @@ export interface DocumentStepNotes {
   departmentScope?: StepDepartmentScope
   resolvedDepartmentName?: string | null
   rejectionReason?: string
+  /** ISO timestamp when the step was rejected. */
+  rejectedAt?: string
+  approvalComment?: string
 }
 
 export function parseStepNotes(notes: string | null): DocumentStepNotes {

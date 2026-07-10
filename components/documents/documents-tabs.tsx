@@ -217,6 +217,7 @@ export function DocumentsTabs({ myDocuments, awaitingMyAction, allDocuments }: D
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const selectedRows = awaitingMyAction.filter((row) => selectedIds.has(row.id))
+  const defaultTab = awaitingMyAction.length > 0 ? 'awaiting' : 'mine'
 
   function toggle(id: string) {
     setSelectedIds((prev) => {
@@ -232,7 +233,7 @@ export function DocumentsTabs({ myDocuments, awaitingMyAction, allDocuments }: D
   }
 
   return (
-    <Tabs defaultValue="mine" className="gap-4">
+    <Tabs defaultValue={defaultTab} className="gap-4">
       <TabsList>
         <TabsTrigger value="mine">My documents</TabsTrigger>
         <TabsTrigger value="awaiting">

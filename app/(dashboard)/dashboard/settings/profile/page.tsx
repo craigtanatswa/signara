@@ -75,7 +75,8 @@ export default async function ProfilePage() {
           <div className="border-b border-t-2 border-t-signara-gold border-signara-steel/20 px-6 py-4 rounded-t-lg">
             <h2 className="font-semibold text-signara-navy">Saved signatures</h2>
             <p className="mt-0.5 text-sm text-signara-steel">
-              Draw, type, or upload a signature once and reuse it when approving documents.
+              Manage your library here — set a default, delete ones you no longer need, or add a new
+              signature to reuse when approving documents.
             </p>
           </div>
           <div className="p-6">

@@ -10,10 +10,22 @@ import {
   Upload,
   Library,
   Save,
+  Star,
+  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { listMySignatures, saveUserSignature } from '@/app/actions/signatures'
+import {
+  deleteUserSignature,
+  listMySignatures,
+  saveUserSignature,
+  setDefaultUserSignature,
+} from '@/app/actions/signatures'
 import { processSignatureUpload } from '@/lib/signatures/remove-background'
+import {
+  SIGNATURE_PREVIEW_CLASS,
+  SIGNATURE_SAVED_THUMB_CLASS,
+} from '@/lib/signatures/constants'
+import { scaleSignatureDataUrl } from '@/lib/signatures/scale-signature'
 import {
   ensureSignatureFonts,
   renderTypedSignature,
@@ -43,10 +55,13 @@ interface SignaturePadProps {
   label?: string
   /**
    * Called when the user clicks Save — use to persist the signature on the
-   * current document. Library save for reuse always runs as well.
+   * current document. Library save for reuse runs at the same time.
    */
   onSave?: (dataUrl: string, method: SignatureCaptureMethod) => void | Promise<void>
-  /** Auto-save new captures to the user's signature library. Default true. */
+  /**
+   * @deprecated Auto-save on draw/type/upload is disabled. Signatures are only
+   * saved to the library when Save (or Approve) is pressed.
+   */
   autoSaveToLibrary?: boolean
   /** Offer the Save button. Default true. */
   showSaveButton?: boolean
@@ -69,7 +84,8 @@ function SignaturePreview({
       src={src}
       alt={alt}
       className={cn(
-        'max-h-32 w-auto bg-[linear-gradient(45deg,#f0f0f0_25%,transparent_25%,transparent_75%,#f0f0f0_75%),linear-gradient(45deg,#f0f0f0_25%,transparent_25%,transparent_75%,#f0f0f0_75%)] bg-[length:16px_16px] bg-[position:0_0,8px_8px]',
+        SIGNATURE_PREVIEW_CLASS,
+        'bg-[linear-gradient(45deg,#f0f0f0_25%,transparent_25%,transparent_75%,#f0f0f0_75%),linear-gradient(45deg,#f0f0f0_25%,transparent_25%,transparent_75%,#f0f0f0_75%)] bg-[length:16px_16px] bg-[position:0_0,8px_8px]',
         className
       )}
     />
@@ -81,14 +97,12 @@ export function SignaturePad({
   value = null,
   label = 'Your signature',
   onSave,
-  autoSaveToLibrary = true,
   showSaveButton = true,
   preferSaved = true,
 }: SignaturePadProps) {
   const canvasRef = useRef<SignatureCanvas>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const librarySavedRef = useRef<string | null>(null)
-  const typeSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const appliedDefaultRef = useRef(false)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
@@ -104,6 +118,7 @@ export function SignaturePad({
   const [selectedSavedId, setSelectedSavedId] = useState<string | null>(null)
   const [lastMethod, setLastMethod] = useState<SignatureCaptureMethod>('draw')
   const [isSaving, startSaveTransition] = useTransition()
+  const [isManaging, startManageTransition] = useTransition()
 
   const hasValue = Boolean(value && value.startsWith('data:image/'))
 
@@ -174,47 +189,6 @@ export function SignaturePad({
     if (!value) setIsEditing(true)
   }, [value])
 
-  useEffect(() => {
-    return () => {
-      if (typeSaveTimerRef.current) clearTimeout(typeSaveTimerRef.current)
-    }
-  }, [])
-
-  async function persistToLibrary(
-    dataUrl: string,
-    method: SignatureCaptureMethod,
-    options?: { notify?: boolean; setAsDefault?: boolean }
-  ) {
-    if (!autoSaveToLibrary) return
-    if (librarySavedRef.current === dataUrl) return
-
-    const result = await saveUserSignature({
-      imageData: dataUrl,
-      method,
-      setAsDefault: options?.setAsDefault ?? saved.length === 0,
-      replaceIfFull: true,
-    })
-
-    if (result.error) {
-      // Don't block signing if the library isn't available yet (e.g. migration pending).
-      if (options?.notify === true) toast.error(result.error)
-      return
-    }
-
-    librarySavedRef.current = dataUrl
-    if (result.signature) {
-      setSaved((prev) => {
-        const without = prev.filter((s) => s.id !== result.signature!.id)
-        return [result.signature!, ...without]
-      })
-      setSelectedSavedId(result.signature.id)
-    }
-
-    if (!result.alreadySaved && options?.notify !== false) {
-      toast.success('Signature saved for future use')
-    }
-  }
-
   function emit(dataUrl: string | null, method: SignatureCaptureMethod) {
     setLastMethod(method)
     onChange(dataUrl, method)
@@ -228,7 +202,6 @@ export function SignaturePad({
     setIsEditing(true)
     appliedDefaultRef.current = true // don't re-auto-apply after explicit clear
     if (fileInputRef.current) fileInputRef.current.value = ''
-    if (typeSaveTimerRef.current) clearTimeout(typeSaveTimerRef.current)
     onChange(null)
   }
 
@@ -238,14 +211,15 @@ export function SignaturePad({
       emit(null, 'draw')
       return
     }
-    const dataUrl = canvas.getTrimmedCanvas().toDataURL('image/png')
-    emit(dataUrl, 'draw')
-    void persistToLibrary(dataUrl, 'draw')
+    void (async () => {
+      const raw = canvas.getTrimmedCanvas().toDataURL('image/png')
+      const dataUrl = await scaleSignatureDataUrl(raw)
+      emit(dataUrl, 'draw')
+    })()
   }
 
   async function handleTypedChange(text: string, nextFont: SignatureFontId = fontId) {
     setTypedText(text)
-    if (typeSaveTimerRef.current) clearTimeout(typeSaveTimerRef.current)
 
     if (!text.trim()) {
       emit(null, 'type')
@@ -253,11 +227,6 @@ export function SignaturePad({
     }
     const dataUrl = await renderTypedSignature(text, nextFont)
     emit(dataUrl, 'type')
-    if (dataUrl) {
-      typeSaveTimerRef.current = setTimeout(() => {
-        void persistToLibrary(dataUrl, 'type')
-      }, 900)
-    }
   }
 
   async function handleFontChange(next: SignatureFontId) {
@@ -265,12 +234,6 @@ export function SignaturePad({
     if (typedText.trim()) {
       const dataUrl = await renderTypedSignature(typedText, next)
       emit(dataUrl, 'type')
-      if (dataUrl) {
-        if (typeSaveTimerRef.current) clearTimeout(typeSaveTimerRef.current)
-        typeSaveTimerRef.current = setTimeout(() => {
-          void persistToLibrary(dataUrl, 'type')
-        }, 900)
-      }
     }
   }
 
@@ -284,7 +247,6 @@ export function SignaturePad({
       setUploadPreview(processed)
       emit(processed, 'upload')
       toast.success('Background removed')
-      void persistToLibrary(processed, 'upload')
     } catch (err) {
       setUploadPreview(null)
       emit(null, 'upload')
@@ -300,6 +262,52 @@ export function SignaturePad({
     librarySavedRef.current = sig.image_data
     setIsEditing(false)
     onChange(sig.image_data, sig.method)
+  }
+
+  function handleSetDefault(sig: UserSignature) {
+    startManageTransition(async () => {
+      const result = await setDefaultUserSignature(sig.id)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      const refreshed = await listMySignatures()
+      if (!refreshed.error) setSaved(refreshed.signatures)
+      else setSaved((prev) => prev.map((s) => ({ ...s, is_default: s.id === sig.id })))
+      toast.success('Default signature updated')
+    })
+  }
+
+  function handleDeleteSaved(sig: UserSignature) {
+    if (!window.confirm(`Delete “${sig.label}”? This cannot be undone.`)) return
+
+    startManageTransition(async () => {
+      const result = await deleteUserSignature(sig.id)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+
+      const refreshed = await listMySignatures()
+      const remaining = refreshed.error
+        ? saved.filter((s) => s.id !== sig.id)
+        : refreshed.signatures
+      setSaved(remaining)
+
+      if (selectedSavedId === sig.id) {
+        const next =
+          remaining.find((s) => s.is_default) ?? remaining[0] ?? null
+        if (next) {
+          handleSelectSaved(next)
+        } else {
+          setSelectedSavedId(null)
+          setIsEditing(true)
+          onChange(null)
+        }
+      }
+
+      toast.success('Signature deleted')
+    })
   }
 
   function handleSave() {
@@ -458,7 +466,7 @@ export function SignaturePad({
             />
           </div>
           <span className="block text-xs text-signara-steel">
-            Draw with your mouse or finger. It is saved for future use automatically.
+            Draw with your mouse or finger. Press Save (or Approve) to keep it for future use.
           </span>
         </TabsContent>
 
@@ -559,27 +567,30 @@ export function SignaturePad({
             <div className="rounded-md border border-dashed border-signara-steel/50 bg-white px-4 py-8 text-center">
               <p className="text-sm text-signara-navy">No saved signatures yet</p>
               <p className="mt-1 text-xs text-signara-steel">
-                Draw, type, or upload a signature — it is saved automatically for next time.
+                Draw, type, or upload a signature, then press Save to keep it for next time.
               </p>
             </div>
           ) : (
             <ul className="grid gap-2 sm:grid-cols-2">
               {saved.map((sig) => (
-                <li key={sig.id}>
+                <li
+                  key={sig.id}
+                  className={cn(
+                    'flex flex-col gap-2 rounded-md border bg-white p-3',
+                    selectedSavedId === sig.id
+                      ? 'border-signara-gold ring-2 ring-signara-gold/40'
+                      : 'border-signara-steel/40'
+                  )}
+                >
                   <button
                     type="button"
                     onClick={() => handleSelectSaved(sig)}
-                    className={cn(
-                      'flex w-full flex-col gap-2 rounded-md border bg-white p-3 text-left transition-colors',
-                      selectedSavedId === sig.id
-                        ? 'border-signara-gold ring-2 ring-signara-gold/40'
-                        : 'border-signara-steel/40 hover:border-signara-navy'
-                    )}
+                    className="flex w-full flex-col gap-2 text-left"
                   >
                     <SignaturePreview
                       src={sig.image_data}
                       alt={sig.label}
-                      className="mx-auto max-h-16"
+                      className={cn('mx-auto', SIGNATURE_SAVED_THUMB_CLASS)}
                     />
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-xs font-medium text-signara-navy">
@@ -592,6 +603,32 @@ export function SignaturePad({
                       )}
                     </div>
                   </button>
+                  <div className="flex flex-wrap gap-1.5">
+                    {!sig.is_default && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isManaging}
+                        onClick={() => handleSetDefault(sig)}
+                        className="h-7 gap-1 border-signara-navy px-2 text-xs text-signara-navy hover:bg-signara-navy hover:text-white"
+                      >
+                        <Star className="size-3" />
+                        Set default
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isManaging}
+                      onClick={() => handleDeleteSaved(sig)}
+                      className="h-7 gap-1 border-destructive px-2 text-xs text-destructive hover:bg-destructive hover:text-white"
+                    >
+                      <Trash2 className="size-3" />
+                      Delete
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>

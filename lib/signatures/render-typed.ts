@@ -1,3 +1,5 @@
+import { scaleSignatureDataUrl } from '@/lib/signatures/scale-signature'
+
 /** Cursive fonts suitable for typed signatures (loaded via Google Fonts CSS). */
 export const SIGNATURE_FONTS = [
   { id: 'great-vibes', family: 'Great Vibes', label: 'Great Vibes' },
@@ -84,5 +86,5 @@ export async function renderTypedSignature(
   ctx.textBaseline = 'alphabetic'
   ctx.fillText(trimmed, paddingX, paddingY + ascent)
 
-  return canvas.toDataURL('image/png')
+  return scaleSignatureDataUrl(canvas.toDataURL('image/png'))
 }

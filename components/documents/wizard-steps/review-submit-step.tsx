@@ -1,6 +1,7 @@
 'use client'
 
 import { Loader2, PlayCircle, User as UserIcon } from 'lucide-react'
+import { SIGNATURE_REVIEW_CLASS } from '@/lib/signatures/constants'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ErrorMessage } from '@/components/ui/error-message'
@@ -102,7 +103,7 @@ export function ReviewSubmitStep({
                       <img
                         src={entry.value as string}
                         alt={entry.attrs.label}
-                        className="max-h-20 w-auto rounded border border-signara-steel/20 bg-white p-1"
+                        className={SIGNATURE_REVIEW_CLASS}
                       />
                     ) : (
                       formatFieldValue(entry)

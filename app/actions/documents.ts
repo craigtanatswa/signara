@@ -17,7 +17,8 @@ import {
   getMissingInitiatorSignatureError,
 } from '@/lib/approval/document-initiator'
 import { shouldIncludeWorkflowStep } from '@/lib/workflow/resolve-steps'
-import { stringifyStepNotes } from '@/lib/workflow/step-notes'
+import { parseStepNotes, stringifyStepNotes } from '@/lib/workflow/step-notes'
+import { notifyApproverForStep } from '@/lib/workflow/notify-routing'
 import {
   getInitiatorSignatureField,
   listApproverSignatureFieldOptions,
@@ -593,7 +594,13 @@ export async function submitDocumentForApproval(documentId: string) {
 
   const { error: documentError } = await supabase
     .from('documents')
-    .update({ status: 'in_progress', updated_at: new Date().toISOString() })
+    .update({
+      status: 'in_progress',
+      current_step: firstStep.step_order,
+      rejection_reason: null,
+      completed_at: null,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', document.id)
 
   if (documentError) {
@@ -609,13 +616,81 @@ export async function submitDocumentForApproval(documentId: string) {
     return { error: stepError.message }
   }
 
-  await supabase.from('notifications').insert({
-    user_id: firstStep.assignee_user_id,
-    document_id: document.id,
-    type: 'approval_required',
-    title: 'Approval required',
-    message: `${profile.full_name} submitted "${document.title}" and it needs your approval.`,
-  })
+  await notifyApproverForStep({
+    document,
+    step: { ...firstStep, status: 'pending' },
+    initiatorName: profile.full_name,
+  }).catch((err) => console.error('[submitDocumentForApproval] notify', err))
+
+  revalidatePath(`/dashboard/documents/${document.id}`)
+  revalidatePath('/dashboard/documents')
+  revalidatePath('/dashboard')
+
+  return { success: true }
+}
+
+/**
+ * Reset a rejected document so the initiator can make changes and submit again.
+ * Steps return to `waiting` (cleared signatures); the first approver is notified
+ * again when they call `submitDocumentForApproval`.
+ */
+export async function resubmitDocument(documentId: string) {
+  const { supabase, profile } = await getAuthenticatedUser()
+
+  const loaded = await loadDocumentForInitiator(
+    supabase,
+    documentId,
+    profile.organisation_id,
+    profile.id
+  )
+  if ('error' in loaded) return { error: loaded.error }
+
+  const { document, steps } = loaded
+
+  if (document.status !== 'rejected') {
+    return { error: 'Only rejected documents can be resubmitted.' }
+  }
+
+  if (document.initiated_by !== profile.id) {
+    return { error: 'Only the initiator can resubmit this document.' }
+  }
+
+  const { error: documentError } = await supabase
+    .from('documents')
+    .update({
+      status: 'draft',
+      completed_at: null,
+      current_step: 0,
+      rejection_reason: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', document.id)
+
+  if (documentError) {
+    return { error: documentError.message }
+  }
+
+  for (const step of steps) {
+    const notes = parseStepNotes(step.notes)
+    const { rejectionReason: _removed, approvalComment: _comment, rejectedAt: _rejectedAt, ...policyNotes } =
+      notes
+
+    const { error: stepError } = await supabase
+      .from('document_steps')
+      .update({
+        status: 'waiting',
+        signed_at: null,
+        signature_url: null,
+        last_reminder_sent_at: null,
+        notes: stringifyStepNotes(policyNotes),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', step.id)
+
+    if (stepError) {
+      return { error: stepError.message }
+    }
+  }
 
   revalidatePath(`/dashboard/documents/${document.id}`)
   revalidatePath('/dashboard/documents')

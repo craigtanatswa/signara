@@ -2,6 +2,7 @@
 export type NotificationType =
   | 'welcome'
   | 'approval_required'
+  | 'approval_assignment_needed'
   | 'document_completed'
   | 'document_rejected'
   | 'template_request'
@@ -23,6 +24,11 @@ export function getNotificationAction(
       return {
         href: documentId ? `/dashboard/documents/${documentId}` : '/dashboard/documents',
         label: 'Review & approve',
+      }
+    case 'approval_assignment_needed':
+      return {
+        href: documentId ? `/dashboard/documents/${documentId}` : '/dashboard/documents',
+        label: 'Assign approver',
       }
     case 'document_completed':
       return {

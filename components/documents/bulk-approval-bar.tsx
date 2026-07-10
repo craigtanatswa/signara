@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 import { approveDocumentStepsBatch } from '@/app/actions/approvals'
+import { saveSignatureForFutureUse } from '@/lib/signatures/save-for-future-use'
 import { SignaturePad } from '@/components/documents/signature-pad'
 import { Button } from '@/components/ui/button'
 import { ErrorMessage } from '@/components/ui/error-message'
@@ -17,6 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import type { AwaitingDocumentRow } from '@/components/documents/documents-tabs'
+import type { SignatureCaptureMethod } from '@/types/database'
 
 interface BulkApprovalBarProps {
   selected: AwaitingDocumentRow[]
@@ -27,6 +29,7 @@ export function BulkApprovalBar({ selected, onClearSelection }: BulkApprovalBarP
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null)
+  const [signatureMethod, setSignatureMethod] = useState<SignatureCaptureMethod>('draw')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -62,6 +65,7 @@ export function BulkApprovalBar({ selected, onClearSelection }: BulkApprovalBarP
       }
 
       if (result.approved > 0) {
+        await saveSignatureForFutureUse(signatureDataUrl, signatureMethod)
         toast.success(
           result.approved === 1
             ? '1 document approved'
@@ -133,7 +137,13 @@ export function BulkApprovalBar({ selected, onClearSelection }: BulkApprovalBarP
           </ul>
 
           {requiresSignature && (
-            <SignaturePad onChange={setSignatureDataUrl} label="Signature for all selected" />
+            <SignaturePad
+              onChange={(dataUrl, method) => {
+                setSignatureDataUrl(dataUrl)
+                if (method) setSignatureMethod(method)
+              }}
+              label="Signature for all selected"
+            />
           )}
 
           {error && <ErrorMessage>{error}</ErrorMessage>}
