@@ -10,8 +10,12 @@ interface RouteContext {
   params: Promise<{ id: string }>
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params
+  const url = new URL(request.url)
+  const wantDownload = url.searchParams.get('download') === '1'
+  // Preview-modal downloads should match the on-screen document (no audit page).
+  const previewOnly = wantDownload
 
   const access = await assertDocumentPdfAccess(id)
   if ('error' in access) {
@@ -21,6 +25,8 @@ export async function GET(_request: Request, context: RouteContext) {
   const result = await generateDocumentPdf({
     documentId: id,
     organisationId: access.organisationId,
+    forceRegenerate: previewOnly,
+    includeAuditTrail: previewOnly ? false : undefined,
   })
 
   if ('error' in result) {
@@ -28,12 +34,13 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   const filename = result.filename.replace(/"/g, '')
+  const disposition = wantDownload ? 'attachment' : 'inline'
 
   return new NextResponse(new Uint8Array(result.buffer), {
     status: 200,
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="${filename}"`,
+      'Content-Disposition': `${disposition}; filename="${filename}"`,
       'Cache-Control': result.fromCache
         ? 'private, max-age=3600'
         : 'private, no-store',

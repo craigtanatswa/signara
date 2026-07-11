@@ -198,6 +198,7 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <DocumentInstancePreview
+                  documentId={document.id}
                   documentTitle={document.title}
                   templateName={document.templates?.name ?? 'Document'}
                   templateContent={document.templates?.content ?? null}

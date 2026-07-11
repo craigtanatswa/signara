@@ -6,14 +6,13 @@ import {
   DOCUMENT_ATTACHMENTS_BUCKET,
   SIGNED_URL_TTL_SECONDS,
 } from '@/lib/storage/document-attachments'
-import { resolvePdfImageSrc } from '@/lib/pdf/resolve-pdf-image'
+import { resolvePdfImageSrc, resolveOrganisationBrandingForPdf } from '@/lib/pdf/resolve-pdf-image'
 import { ExecutedDocument } from '@/lib/pdf/executed-document'
 import {
   AuditTrailDocument,
   mapStepStatusToAuditLabel,
   type AuditTrailStepRow,
 } from '@/lib/pdf/components/audit-trail'
-import type { SignatureBlockEntry } from '@/lib/pdf/components/signature-block'
 import {
   mergePdfBuffers,
   stampUploadedDocument,
@@ -29,7 +28,8 @@ import type {
 } from '@/types/database'
 
 export function getFinalPdfStoragePath(organisationId: string, documentId: string): string {
-  return `${organisationId}/${documentId}/final.pdf`
+  // v2 = template-faithful layout (logo/letterhead/field controls matching on-screen preview)
+  return `${organisationId}/${documentId}/final-v2.pdf`
 }
 
 type StepWithUser = DocumentStep & {
@@ -69,26 +69,10 @@ function buildAuditSteps(steps: StepWithUser[]): AuditTrailStepRow[] {
   })
 }
 
-function buildSignatureEntries(
-  steps: StepWithUser[],
-  imagesByStepId: Record<string, string | null>
-): SignatureBlockEntry[] {
-  return steps.map((step) => {
-    const notes = parseStepNotes(step.notes)
-    const isPhysical =
-      notes.physicalSignature === true || step.signature_url === 'physical'
-
-    return {
-      stepOrder: step.step_order,
-      fullName: step.full_name ?? 'Unknown',
-      authorityText: notes.authorityText ?? null,
-      signedAt: step.signed_at,
-      imageSrc: imagesByStepId[step.id] ?? null,
-      isPhysical,
-      status: step.status,
-    }
-  })
-}
+type OrganisationPdfContext = Pick<
+  Organisation,
+  'id' | 'name' | 'logo_url' | 'letterhead_url' | 'letterhead_landscape_url'
+>
 
 async function loadPdfContext(
   documentId: string,
@@ -98,7 +82,7 @@ async function loadPdfContext(
   | {
       document: Document & { templates: Template | null }
       template: Template
-      organisation: Pick<Organisation, 'id' | 'name' | 'logo_url'>
+      organisation: OrganisationPdfContext
       steps: StepWithUser[]
       initiatedByName: string
     }
@@ -124,7 +108,7 @@ async function loadPdfContext(
 
   const { data: orgData } = await admin
     .from('organisations')
-    .select('id, name, logo_url')
+    .select('id, name, logo_url, letterhead_url, letterhead_landscape_url')
     .eq('id', organisationId)
     .maybeSingle()
 
@@ -132,7 +116,7 @@ async function loadPdfContext(
     return { error: 'Organisation not found.' }
   }
 
-  const organisation = orgData as Pick<Organisation, 'id' | 'name' | 'logo_url'>
+  const organisation = orgData as OrganisationPdfContext
 
   const { data: stepsData } = await admin
     .from('document_steps')
@@ -255,9 +239,10 @@ async function resolveSourceFileUrl(sourceFileUrl: string): Promise<string> {
 async function generateTiptapPdf(input: {
   document: Document
   template: Template
-  organisation: Pick<Organisation, 'id' | 'name' | 'logo_url'>
+  organisation: OrganisationPdfContext
   steps: StepWithUser[]
   initiatedByName: string
+  includeAuditTrail?: boolean
 }): Promise<Buffer> {
   const fieldValues = { ...(input.document.data ?? {}) }
   const signaturesByFieldId: Record<string, string | null> = {}
@@ -270,23 +255,29 @@ async function generateTiptapPdf(input: {
     }
   }
 
-  const imagesByStepId: Record<string, string | null> = {}
   await Promise.all(
     input.steps.map(async (step) => {
       const src = await resolveSignatureSrc(step.signature_url)
-      imagesByStepId[step.id] = src
       if (step.signature_field_id && step.status === 'approved' && src) {
         signaturesByFieldId[step.signature_field_id] = src
       }
     })
   )
 
-  const logoSrc = await resolvePdfImageSrc(input.organisation.logo_url)
+  const organisationBranding = await resolveOrganisationBrandingForPdf({
+    logoUrl: input.organisation.logo_url,
+    letterheadUrl: input.organisation.letterhead_url,
+    letterheadLandscapeUrl: input.organisation.letterhead_landscape_url,
+  })
 
   const rejectedStep = input.steps.find((s) => s.status === 'rejected')
   const rejectedAt = rejectedStep
     ? parseStepNotes(rejectedStep.notes).rejectedAt ?? rejectedStep.signed_at
     : null
+
+  const includeAuditTrail =
+    input.includeAuditTrail ??
+    (input.document.status === 'completed' || input.document.status === 'rejected')
 
   const element = createElement(ExecutedDocument, {
     document: {
@@ -301,17 +292,14 @@ async function generateTiptapPdf(input: {
       name: input.template.name,
       content: input.template.content,
     },
-    organisation: {
-      name: input.organisation.name,
-      logo_url: input.organisation.logo_url,
-      logoSrc,
-    },
+    organisationBranding,
+    organisationName: input.organisation.name,
     fieldValues,
     signaturesByFieldId,
-    signatureEntries: buildSignatureEntries(input.steps, imagesByStepId),
     auditSteps: buildAuditSteps(input.steps),
     initiatedByName: input.initiatedByName,
     rejectedAt,
+    includeAuditTrail,
   })
 
   return renderToBuffer(element as Parameters<typeof renderToBuffer>[0])
@@ -320,7 +308,7 @@ async function generateTiptapPdf(input: {
 async function generateUploadedDocumentPdf(input: {
   document: Document
   template: Template
-  organisation: Pick<Organisation, 'id' | 'name' | 'logo_url'>
+  organisation: OrganisationPdfContext
   steps: StepWithUser[]
   initiatedByName: string
 }): Promise<Buffer> {
@@ -401,6 +389,11 @@ export async function generateDocumentPdf(input: {
   organisationId: string
   /** When true, skip the stored final PDF even if present. */
   forceRegenerate?: boolean
+  /**
+   * When false, omit the audit-trail page so the PDF matches the on-screen
+   * document preview. Defaults to including it for completed/rejected docs.
+   */
+  includeAuditTrail?: boolean
 }): Promise<GenerateDocumentPdfResult | { error: string }> {
   const loaded = await loadPdfContext(input.documentId, input.organisationId)
   if ('error' in loaded) return loaded
@@ -410,12 +403,18 @@ export async function generateDocumentPdf(input: {
     .replace(/[^a-zA-Z0-9-_ ]/g, '')
     .trim() || 'document'}.pdf`
 
+  const cachedPath = document.final_pdf_url
+  const isTemplateFaithfulCache =
+    typeof cachedPath === 'string' && cachedPath.includes('final-v2.pdf')
+
   if (
     !input.forceRegenerate &&
+    input.includeAuditTrail !== false &&
     document.status === 'completed' &&
-    document.final_pdf_url
+    isTemplateFaithfulCache &&
+    cachedPath
   ) {
-    const cached = await downloadStoredFinalPdf(document.final_pdf_url)
+    const cached = await downloadStoredFinalPdf(cachedPath)
     if (cached) {
       return { buffer: cached, filename, fromCache: true }
     }
@@ -441,7 +440,23 @@ export async function generateDocumentPdf(input: {
           organisation,
           steps,
           initiatedByName,
+          includeAuditTrail:
+            input.includeAuditTrail ??
+            (document.status === 'completed' || document.status === 'rejected'),
         })
+
+    // Refresh the immutable final when we regenerated a completed document with audit trail.
+    if (
+      document.status === 'completed' &&
+      input.includeAuditTrail !== false &&
+      !isUploaded
+    ) {
+      await storeFinalDocumentPdf({
+        organisationId: input.organisationId,
+        documentId: input.documentId,
+        buffer,
+      }).catch((err) => console.error('[generateDocumentPdf] refresh final', err))
+    }
 
     return { buffer, filename, fromCache: false }
   } catch (err) {

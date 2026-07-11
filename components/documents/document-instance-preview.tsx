@@ -4,11 +4,13 @@ import { useState } from 'react'
 import { Eye, X } from 'lucide-react'
 import { DocumentContentView } from '@/components/documents/document-content-view'
 import { DocumentFilledFieldDisplay } from '@/components/documents/document-filled-field-display'
+import { DocumentPdfButton } from '@/components/documents/document-pdf-button'
 import { Button } from '@/components/ui/button'
 import type { DocumentPreviewContext } from '@/lib/documents/build-preview-context'
 import type { FormFieldAttrs, OrganisationBranding, TiptapDocument } from '@/types/database'
 
 interface DocumentInstancePreviewProps {
+  documentId: string
   documentTitle: string
   templateName: string
   templateContent: TiptapDocument | null
@@ -17,6 +19,7 @@ interface DocumentInstancePreviewProps {
 }
 
 export function DocumentInstancePreview({
+  documentId,
   documentTitle,
   templateName,
   templateContent,
@@ -58,15 +61,18 @@ export function DocumentInstancePreview({
                   {templateName} — filled fields and signatures as they appear on the document
                 </p>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setOpen(false)}
-                className="text-signara-steel"
-              >
-                <X className="mr-1 size-4" />
-                Close
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <DocumentPdfButton documentId={documentId} mode="download" forceDownload />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setOpen(false)}
+                  className="text-signara-steel"
+                >
+                  <X className="mr-1 size-4" />
+                  Close
+                </Button>
+              </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto bg-[#dde1e6] p-4">
               <DocumentContentView

@@ -9,140 +9,166 @@ import {
 import { normalizeFontSize } from '@/lib/tiptap/font-size'
 import { formatPdfDateValue, formatPdfFieldValue } from '@/lib/pdf/format-values'
 import { getAttachmentFilename } from '@/lib/storage/document-attachments'
+import type { PageLayout } from '@/lib/tiptap/page-size'
 
-const styles = StyleSheet.create({
-  h1: {
-    fontSize: 18,
-    fontFamily: 'Helvetica-Bold',
-    marginBottom: 6,
-    marginTop: 12,
-    color: '#0F2C59',
-  },
-  h2: {
-    fontSize: 14,
-    fontFamily: 'Helvetica-Bold',
-    marginBottom: 4,
-    marginTop: 10,
-    color: '#0F2C59',
-  },
-  h3: {
-    fontSize: 12,
-    fontFamily: 'Helvetica-Bold',
-    marginBottom: 4,
-    marginTop: 8,
-    color: '#0F2C59',
-  },
-  paragraph: {
-    marginBottom: 6,
-    fontSize: 10,
-    lineHeight: 1.55,
-    color: '#0F2C59',
-  },
-  listItem: {
-    flexDirection: 'row',
-    marginBottom: 3,
-    paddingLeft: 8,
-  },
-  bullet: {
-    width: 14,
-    fontSize: 10,
-    color: '#0F2C59',
-  },
-  listItemText: {
-    flex: 1,
-    fontSize: 10,
-    color: '#0F2C59',
-  },
-  hr: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#A1A8A2',
-    marginVertical: 10,
-  },
-  fieldRow: {
-    marginVertical: 4,
-  },
-  fieldLabelValue: {
-    fontSize: 10,
-    color: '#0F2C59',
-    lineHeight: 1.45,
-  },
-  fieldLabel: {
-    fontFamily: 'Helvetica-Bold',
-  },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginVertical: 3,
-  },
-  checkboxMark: {
-    fontSize: 11,
-    color: '#0F2C59',
-  },
-  signatureInline: {
-    marginVertical: 6,
-    maxWidth: 220,
-  },
-  signatureImage: {
-    width: 180,
-    height: 48,
-    objectFit: 'contain',
-    marginTop: 4,
-  },
-  signaturePlaceholder: {
-    marginTop: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: '#A1A8A2',
-    borderRadius: 4,
-    fontSize: 9,
-    color: '#A1A8A2',
-    backgroundColor: '#F8F9FA',
-  },
-  fileNote: {
-    fontSize: 9,
-    color: '#A1A8A2',
-    marginTop: 2,
-  },
-  tableContainer: {
-    marginVertical: 8,
-    borderWidth: 1,
-    borderColor: '#A1A8A2',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#A1A8A2',
-  },
-  tableCell: {
-    flex: 1,
-    padding: 6,
-    fontSize: 9,
-    borderRightWidth: 1,
-    borderRightColor: '#A1A8A2',
-    color: '#0F2C59',
-  },
-  tableHeaderCell: {
-    flex: 1,
-    padding: 6,
-    fontSize: 9,
-    fontFamily: 'Helvetica-Bold',
-    backgroundColor: '#F8F9FA',
-    borderRightWidth: 1,
-    borderRightColor: '#A1A8A2',
-    color: '#0F2C59',
-  },
-  blockquote: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#D4AF37',
-    paddingLeft: 10,
-    marginVertical: 6,
-  },
-})
+export function createExecutedContentStyles(textColor: string) {
+  return StyleSheet.create({
+    h1: {
+      fontSize: 20,
+      fontFamily: 'Helvetica-Bold',
+      marginBottom: 6,
+      marginTop: 12,
+      color: textColor,
+    },
+    h2: {
+      fontSize: 15,
+      fontFamily: 'Helvetica-Bold',
+      marginBottom: 4,
+      marginTop: 10,
+      color: textColor,
+    },
+    h3: {
+      fontSize: 13,
+      fontFamily: 'Helvetica-Bold',
+      marginBottom: 4,
+      marginTop: 8,
+      color: textColor,
+    },
+    paragraph: {
+      marginBottom: 6,
+      fontSize: 11,
+      lineHeight: 1.6,
+      color: textColor,
+    },
+    listItem: {
+      flexDirection: 'row',
+      marginBottom: 3,
+      paddingLeft: 8,
+    },
+    bullet: {
+      width: 12,
+      fontSize: 11,
+      color: textColor,
+    },
+    listItemText: {
+      flex: 1,
+      fontSize: 11,
+      color: textColor,
+    },
+    hr: {
+      borderBottomWidth: 1,
+      borderBottomColor: '#a1a8a2',
+      marginVertical: 10,
+    },
+    /** Matches DocumentFilledFieldDisplay / on-screen preview controls. */
+    formFieldStack: {
+      marginVertical: 4,
+      minWidth: 160,
+      maxWidth: 280,
+    },
+    formFieldLabel: {
+      fontSize: 9,
+      fontFamily: 'Helvetica-Bold',
+      color: textColor,
+      marginBottom: 3,
+    },
+    formFieldRequired: {
+      fontSize: 9,
+      color: '#e53e3e',
+    },
+    formFieldInput: {
+      borderWidth: 1,
+      borderColor: '#A1A8A2',
+      borderRadius: 4,
+      paddingVertical: 6,
+      paddingHorizontal: 8,
+      fontSize: 10,
+      color: textColor,
+      backgroundColor: '#FFFFFF',
+      minHeight: 22,
+    },
+    formFieldCheckboxRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginVertical: 4,
+    },
+    formFieldCheckbox: {
+      width: 12,
+      height: 12,
+      borderWidth: 1,
+      borderColor: '#A1A8A2',
+      borderRadius: 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    formFieldCheckboxChecked: {
+      fontSize: 9,
+      fontFamily: 'Helvetica-Bold',
+      color: textColor,
+    },
+    formFieldSignatureLabel: {
+      fontSize: 9,
+      fontFamily: 'Helvetica-Bold',
+      color: textColor,
+      marginBottom: 3,
+    },
+    formFieldSignatureImage: {
+      maxWidth: 220,
+      height: 56,
+      objectFit: 'contain',
+    },
+    formFieldSignaturePending: {
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: '#A1A8A2',
+      borderRadius: 4,
+      paddingVertical: 10,
+      paddingHorizontal: 10,
+      marginVertical: 4,
+      backgroundColor: '#F0F1F0',
+      fontSize: 9,
+      color: '#A1A8A2',
+      minWidth: 140,
+    },
+    tableContainer: {
+      marginVertical: 8,
+      borderWidth: 1,
+      borderColor: '#a1a8a2',
+    },
+    tableRow: {
+      flexDirection: 'row',
+      borderBottomWidth: 1,
+      borderBottomColor: '#a1a8a2',
+    },
+    tableCell: {
+      flex: 1,
+      padding: 6,
+      fontSize: 10,
+      borderRightWidth: 1,
+      borderRightColor: '#a1a8a2',
+      color: textColor,
+    },
+    tableHeaderCell: {
+      flex: 1,
+      padding: 6,
+      fontSize: 10,
+      fontFamily: 'Helvetica-Bold',
+      backgroundColor: '#f8f9fa',
+      borderRightWidth: 1,
+      borderRightColor: '#a1a8a2',
+      color: textColor,
+    },
+    blockquote: {
+      borderLeftWidth: 3,
+      borderLeftColor: '#D4AF37',
+      paddingLeft: 10,
+      marginVertical: 6,
+    },
+  })
+}
 
-type PdfTextStyle = Style
+type PdfStyles = ReturnType<typeof createExecutedContentStyles>
 
 function mergeStyles(...parts: object[]): Style {
   return Object.assign({}, ...parts) as Style
@@ -194,7 +220,7 @@ function getMarkStyles(marks: TiptapMark[] | undefined, defaultColor: string) {
   }
 }
 
-function getBlockStyle(node: TiptapNode, baseStyle: PdfTextStyle): PdfTextStyle {
+function getBlockStyle(node: TiptapNode, baseStyle: Style): Style {
   const attrs = node.attrs ?? {}
   const indent = typeof attrs.indent === 'number' ? attrs.indent : 0
   const lineHeight =
@@ -220,15 +246,14 @@ function getBlockStyle(node: TiptapNode, baseStyle: PdfTextStyle): PdfTextStyle 
 
 export interface RenderContentContext {
   fieldValues: Record<string, unknown>
-  /** Embeddable signature data URLs keyed by fieldId. */
   signaturesByFieldId: Record<string, string | null>
-  textColor?: string
+  textColor: string
+  styles: PdfStyles
 }
 
 function renderInlineContent(
   nodes: TiptapNode[] | undefined,
-  baseStyle: PdfTextStyle,
-  defaultColor: string,
+  baseStyle: Style,
   keyPrefix: string,
   ctx: RenderContentContext
 ): ReactNode {
@@ -239,7 +264,7 @@ function renderInlineContent(
       return (
         <Text
           key={`${keyPrefix}-text-${index}`}
-          style={mergeStyles(baseStyle, getMarkStyles(node.marks, defaultColor))}
+          style={mergeStyles(baseStyle, getMarkStyles(node.marks, ctx.textColor))}
         >
           {node.text ?? ''}
         </Text>
@@ -264,8 +289,7 @@ function renderInlineContent(
 
 function renderBlockContent(
   nodes: TiptapNode[] | undefined,
-  baseStyle: PdfTextStyle,
-  defaultColor: string,
+  baseStyle: Style,
   keyPrefix: string,
   ctx: RenderContentContext
 ): ReactNode {
@@ -273,16 +297,10 @@ function renderBlockContent(
 
   return nodes.map((node, index) => {
     if (node.type === 'paragraph') {
-      const paragraphStyle = getBlockStyle(node, { ...baseStyle, marginBottom: 4 })
+      const paragraphStyle = getBlockStyle(node, mergeStyles(baseStyle, { marginBottom: 4 }))
       return (
         <Text key={`${keyPrefix}-p-${index}`} style={paragraphStyle}>
-          {renderInlineContent(
-            node.content,
-            paragraphStyle,
-            defaultColor,
-            `${keyPrefix}-p-${index}`,
-            ctx
-          )}
+          {renderInlineContent(node.content, paragraphStyle, `${keyPrefix}-p-${index}`, ctx)}
         </Text>
       )
     }
@@ -291,50 +309,57 @@ function renderBlockContent(
   })
 }
 
+function displayFieldValue(fieldType: string, value: unknown): string {
+  if (fieldType === 'date') return formatPdfDateValue(value)
+  return formatPdfFieldValue(fieldType, value)
+}
+
 function renderFormField(
   node: TiptapNode,
   key: string,
   ctx: RenderContentContext
 ): ReactNode {
+  const { styles } = ctx
   const attrs = normalizeFormFieldAttrs(node.attrs)
   const label = getFieldDisplayLabel(attrs)
   const value = ctx.fieldValues[attrs.fieldId]
 
   if (attrs.fieldType === 'signature') {
     const imageSrc = ctx.signaturesByFieldId[attrs.fieldId] ?? null
+    if (imageSrc) {
+      return (
+        <View key={key} style={styles.formFieldStack} wrap={false}>
+          <Text style={styles.formFieldSignatureLabel}>{label}</Text>
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- signature image in PDF output */}
+          <Image src={imageSrc} style={styles.formFieldSignatureImage} />
+        </View>
+      )
+    }
+
+    const pending =
+      value === 'physical'
+        ? 'Physically signed'
+        : attrs.signatureRole === 'initiator'
+          ? `${label} — not signed`
+          : `${label} — awaiting signature`
+
     return (
-      <View key={key} style={styles.signatureInline} wrap={false}>
-        <Text style={styles.fieldLabelValue}>
-          <Text style={styles.fieldLabel}>{label}</Text>
-        </Text>
-        {imageSrc ? (
-          // eslint-disable-next-line jsx-a11y/alt-text -- signature image in PDF output
-          <Image src={imageSrc} style={styles.signatureImage} />
-        ) : (
-          <Text style={styles.signaturePlaceholder}>
-            {value === 'physical' ? 'Physically signed' : 'Signature pending'}
-          </Text>
-        )}
-      </View>
+      <Text key={key} style={styles.formFieldSignaturePending}>
+        {pending}
+      </Text>
     )
   }
 
   if (attrs.fieldType === 'checkbox') {
     const checked = Boolean(value)
     return (
-      <View key={key} style={styles.checkboxRow} wrap={false}>
-        <Text style={styles.checkboxMark}>{checked ? '[X]' : '[ ]'}</Text>
-        <Text style={styles.fieldLabelValue}>{label}</Text>
-      </View>
-    )
-  }
-
-  if (attrs.fieldType === 'date') {
-    return (
-      <View key={key} style={styles.fieldRow} wrap={false}>
-        <Text style={styles.fieldLabelValue}>
-          <Text style={styles.fieldLabel}>{label}: </Text>
-          {formatPdfDateValue(value)}
+      <View key={key} style={styles.formFieldCheckboxRow} wrap={false}>
+        <View style={styles.formFieldCheckbox}>
+          {checked ? <Text style={styles.formFieldCheckboxChecked}>X</Text> : null}
+        </View>
+        <Text style={{ fontSize: 10, color: ctx.textColor }}>
+          {attrs.label}
+          {attrs.required ? <Text style={styles.formFieldRequired}> *</Text> : null}
         </Text>
       </View>
     )
@@ -344,34 +369,29 @@ function renderFormField(
     const filename =
       typeof value === 'string' && value ? getAttachmentFilename(value) : null
     return (
-      <View key={key} style={styles.fieldRow} wrap={false}>
-        <Text style={styles.fieldLabelValue}>
-          <Text style={styles.fieldLabel}>{label}: </Text>
-          {filename ? `[Attached: ${filename}]` : '—'}
+      <View key={key} style={styles.formFieldStack} wrap={false}>
+        <Text style={styles.formFieldLabel}>
+          {label}
+          {attrs.required ? <Text style={styles.formFieldRequired}> *</Text> : null}
         </Text>
-        {filename ? (
-          <Text style={styles.fileNote}>See audit trail / attachments for the file link</Text>
-        ) : null}
+        <Text style={styles.formFieldInput}>{filename ?? '—'}</Text>
       </View>
     )
   }
 
   return (
-    <View key={key} style={styles.fieldRow} wrap={false}>
-      <Text style={styles.fieldLabelValue}>
-        <Text style={styles.fieldLabel}>{label}: </Text>
-        {formatPdfFieldValue(attrs.fieldType, value)}
+    <View key={key} style={styles.formFieldStack} wrap={false}>
+      <Text style={styles.formFieldLabel}>
+        {label}
+        {attrs.required ? <Text style={styles.formFieldRequired}> *</Text> : null}
       </Text>
+      <Text style={styles.formFieldInput}>{displayFieldValue(attrs.fieldType, value)}</Text>
     </View>
   )
 }
 
-function renderNode(
-  node: TiptapNode,
-  key: string,
-  ctx: RenderContentContext
-): ReactNode {
-  const textColor = ctx.textColor ?? '#0F2C59'
+function renderNode(node: TiptapNode, key: string, ctx: RenderContentContext): ReactNode {
+  const { styles, textColor } = ctx
 
   switch (node.type) {
     case 'heading': {
@@ -382,7 +402,7 @@ function renderNode(
       )
       return (
         <Text key={key} style={style}>
-          {renderInlineContent(node.content, style, textColor, key, ctx)}
+          {renderInlineContent(node.content, style, key, ctx)}
         </Text>
       )
     }
@@ -401,7 +421,6 @@ function renderNode(
         )
       }
 
-      // Paragraphs that contain formFields can't be pure Text trees — use View.
       const hasFormField = (node.content ?? []).some((child) => child.type === 'formField')
       if (hasFormField) {
         return (
@@ -432,7 +451,7 @@ function renderNode(
       const style = getBlockStyle(node, styles.paragraph)
       return (
         <Text key={key} style={style}>
-          {renderInlineContent(node.content, style, textColor, key, ctx)}
+          {renderInlineContent(node.content, style, key, ctx)}
         </Text>
       )
     }
@@ -450,7 +469,6 @@ function renderNode(
                   {renderBlockContent(
                     item.content,
                     styles.listItemText,
-                    textColor,
                     `${key}-li-${index}`,
                     ctx
                   )}
@@ -481,7 +499,6 @@ function renderNode(
                     {renderBlockContent(
                       cell.content,
                       cellStyle,
-                      textColor,
                       `${key}-cell-${rowIdx}-${cellIdx}`,
                       ctx
                     )}
@@ -499,10 +516,9 @@ function renderNode(
         <View key={key} style={styles.blockquote}>
           {renderBlockContent(
             node.content,
-            { ...styles.paragraph, color: '#A1A8A2' },
-            '#A1A8A2',
+            mergeStyles(styles.paragraph, { color: '#a1a8a2' }),
             `${key}-quote`,
-            ctx
+            { ...ctx, textColor: '#a1a8a2' }
           )}
         </View>
       )
@@ -513,17 +529,20 @@ function renderNode(
   }
 }
 
-/** Walk Tiptap JSON and produce @react-pdf/renderer elements with real field values. */
+/** Walk Tiptap JSON and produce @react-pdf elements matching the on-screen document preview. */
 export function renderTiptapToPdf(
   content: TiptapDocument,
   fieldValues: Record<string, unknown>,
   signaturesByFieldId: Record<string, string | null> = {},
-  textColor = '#0F2C59'
+  textColor = '#000000',
+  _layout?: PageLayout
 ): ReactNode {
+  const styles = createExecutedContentStyles(textColor)
   const ctx: RenderContentContext = {
     fieldValues,
     signaturesByFieldId,
     textColor,
+    styles,
   }
 
   return (content.content ?? []).map((node, index) =>
