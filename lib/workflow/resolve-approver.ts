@@ -49,7 +49,7 @@ export async function resolveApprover(
   if (role) {
     const { data: users, error } = await supabase
       .from('users')
-      .select('id, full_name, email, department, departments(name)')
+      .select('id, full_name, email, department, departments!users_department_id_fkey(name)')
       .eq('organisation_id', organisationId)
       .order('full_name')
       .limit(50)

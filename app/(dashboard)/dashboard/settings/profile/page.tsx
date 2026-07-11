@@ -21,7 +21,7 @@ export default async function ProfilePage() {
   const [{ data: userProfile }, signaturesResult] = await Promise.all([
     supabase
       .from('users')
-      .select('*, organisations(*), departments(id, name, is_executive)')
+      .select('*, organisations(*), departments!users_department_id_fkey(id, name, is_executive)')
       .eq('id', authUser.id)
       .single(),
     supabase

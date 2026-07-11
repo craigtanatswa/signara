@@ -31,7 +31,7 @@ export async function GET() {
   const [{ data: users, error }, overseenByUser] = await Promise.all([
     supabase
       .from('users')
-      .select('id, full_name, email, department_id, job_level, departments(name)')
+      .select('id, full_name, email, department_id, job_level, departments!users_department_id_fkey(name)')
       .eq('organisation_id', currentUser.organisation_id)
       .order('full_name'),
     loadOverseenDepartmentIdsByUser(supabase, currentUser.organisation_id),

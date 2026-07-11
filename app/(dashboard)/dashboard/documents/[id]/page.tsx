@@ -84,7 +84,8 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
     assigneeIds.length > 0
       ? await admin
           .from('users')
-          .select('id, full_name, email, job_level, departments(name)')
+          // Disambiguate: users also link to departments via user_overseen_departments.
+          .select('id, full_name, email, job_level, departments!users_department_id_fkey(name)')
           .in('id', assigneeIds)
       : { data: [] as Array<{
           id: string
@@ -116,7 +117,7 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
 
   const { data: initiator } = await admin
     .from('users')
-    .select('full_name, departments(name)')
+    .select('full_name, departments!users_department_id_fkey(name)')
     .eq('id', document.initiated_by)
     .maybeSingle()
 
