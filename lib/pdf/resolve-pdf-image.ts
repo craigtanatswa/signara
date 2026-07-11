@@ -3,6 +3,12 @@ const resolvedImageCache = new Map<string, string>()
 export async function resolvePdfImageSrc(url: string | null | undefined): Promise<string | null> {
   if (!url) return null
 
+  // Already embeddable for @react-pdf/renderer Image
+  if (url.startsWith('data:image/')) return url
+
+  // Physical / print signature sentinel — not an image
+  if (url === 'physical') return null
+
   const cached = resolvedImageCache.get(url)
   if (cached) return cached
 

@@ -17,6 +17,12 @@ export interface DocumentStepNotes {
   /** ISO timestamp when the step was rejected. */
   rejectedAt?: string
   approvalComment?: string
+  /** True when the step was marked as physically / print-signed (no digital image). */
+  physicalSignature?: boolean
+  /** Client IP recorded at signing time, when available. */
+  signerIp?: string
+  /** Truncated user-agent recorded at signing time, when available. */
+  userAgent?: string
 }
 
 export function parseStepNotes(notes: string | null): DocumentStepNotes {

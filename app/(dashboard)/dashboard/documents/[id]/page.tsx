@@ -23,6 +23,7 @@ import { parseStepNotes } from '@/lib/workflow/step-notes'
 import { buildDocumentPreviewContext } from '@/lib/documents/build-preview-context'
 import { loadDocumentForViewer } from '@/lib/documents/load-for-viewer'
 import { DocumentInstancePreview } from '@/components/documents/document-instance-preview'
+import { DocumentPdfButton } from '@/components/documents/document-pdf-button'
 import { isJobLevel, type JobLevel } from '@/types/org-structure'
 import type { User, Document } from '@/types/database'
 
@@ -203,6 +204,14 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
                   organisationBranding={organisationBranding}
                   preview={previewContext}
                 />
+                {(document.status === 'completed' ||
+                  document.status === 'in_progress' ||
+                  document.status === 'rejected') && (
+                  <DocumentPdfButton
+                    documentId={document.id}
+                    mode={document.status === 'completed' ? 'download' : 'preview'}
+                  />
+                )}
                 <Badge variant="outline" className={STATUS_BADGE_CLASS[document.status]}>
                   {STATUS_LABEL[document.status]}
                 </Badge>

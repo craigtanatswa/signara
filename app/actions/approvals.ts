@@ -12,6 +12,7 @@ import {
   notifyDocumentCompleted,
   notifyDocumentRejected,
 } from '@/lib/workflow/notify-routing'
+import { generateAndStoreFinalPdf } from '@/lib/pdf/generate-document-pdf'
 import type { Document, DocumentStep } from '@/types/database'
 
 type AdminClient = Awaited<ReturnType<typeof createAdminClient>>
@@ -172,6 +173,12 @@ async function approveDocumentStepInternal(
         updated_at: new Date().toISOString(),
       })
       .eq('id', document.id)
+
+    // Persist an immutable final PDF — failures must not block completion.
+    await generateAndStoreFinalPdf({
+      documentId: document.id,
+      organisationId: document.organisation_id,
+    }).catch((err) => console.error('[approveDocumentStep] final PDF', err))
 
     await notifyDocumentCompleted({ document }).catch((err) =>
       console.error('[approveDocumentStep] notify complete', err)

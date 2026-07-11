@@ -116,6 +116,28 @@ export interface TiptapDocument {
 /** Organisation templates are usable by any member; department templates only by that department. */
 export type TemplateScope = 'organisation' | 'department'
 
+/** How a template's body is authored. Defaults to tiptap when unset. */
+export type TemplateType = 'tiptap' | 'uploaded_document'
+
+/**
+ * Field overlay on an uploaded PDF template.
+ * Coordinates are percentages (0–1) relative to the page, top-left origin.
+ * `page` is 0-indexed to match pdf-lib's `getPage()`.
+ */
+export interface FieldPosition {
+  fieldId: string
+  fieldType: FieldType
+  label: string
+  page: number
+  x: number
+  y: number
+  width: number
+  height: number
+  required?: boolean
+  options?: string[]
+  signatureRole?: SignatureRole
+}
+
 export interface Template {
   id: string
   organisation_id: string
@@ -128,6 +150,12 @@ export interface Template {
   created_by: string
   version: number
   is_active: boolean
+  /** Present when Phase 2 Part 7 uploaded-document templates are enabled. */
+  template_type?: TemplateType | null
+  /** Original uploaded PDF URL (uploaded_document templates only). */
+  source_file_url?: string | null
+  /** Overlay field positions (uploaded_document templates only). */
+  field_positions?: FieldPosition[] | null
   created_at: string
   updated_at: string
 }
@@ -144,6 +172,11 @@ export interface Document {
   /** Index of the currently active step (legacy / sync column). */
   current_step?: number | null
   rejection_reason?: string | null
+  /**
+   * Storage path of the immutable final PDF in `document-attachments`
+   * (e.g. `{orgId}/{documentId}/final.pdf`), set when the document completes.
+   */
+  final_pdf_url?: string | null
   created_at: string
   updated_at: string
 }
