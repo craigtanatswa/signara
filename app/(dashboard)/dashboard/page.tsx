@@ -159,7 +159,7 @@ export default async function DashboardPage() {
             <Link
               key={stat.label}
               href={stat.href}
-              className="rounded-lg border border-signara-steel/30 bg-white p-6 shadow-sm transition-colors hover:border-signara-gold/50"
+              className="rounded-lg border border-signara-steel/30 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-signara-gold/50 hover:shadow-md"
             >
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-signara-steel">
