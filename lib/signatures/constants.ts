@@ -1,5 +1,8 @@
 /** Uniform downscale applied when capturing signatures (draw / type / upload). */
-export const SIGNATURE_DISPLAY_SCALE = 0.7
+export const SIGNATURE_DISPLAY_SCALE = 0.55
+
+/** Hard cap on encoded signature width (keeps server-action payloads small). */
+export const SIGNATURE_MAX_WIDTH = 480
 
 /** Pad / wizard preview thumbnail. */
 export const SIGNATURE_PREVIEW_CLASS =

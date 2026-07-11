@@ -9,7 +9,6 @@ import {
   View,
   StyleSheet,
   PDFViewer,
-  PDFDownloadLink,
 } from '@react-pdf/renderer'
 import type { OrganisationBranding, TiptapDocument, TiptapMark, TiptapNode } from '@/types/database'
 import {
@@ -22,7 +21,7 @@ import {
   normalizeFormFieldAttrs,
 } from '@/lib/tiptap/field-utils'
 import { normalizeFontSize } from '@/lib/tiptap/font-size'
-import { resolveOrganisationBrandingForPdf } from '@/lib/pdf/resolve-pdf-image'
+import { resolveOrganisationBrandingForPdf } from '@/lib/pdf/resolve-pdf-image-client'
 import { getPageLayout, resolveLetterheadUrl, type PageLayout } from '@/lib/tiptap/page-size'
 
 function createStyles(textColor: string, hasLogo: boolean, layout: PageLayout) {
@@ -612,6 +611,7 @@ export function TemplatePdfDownloadButton({
   const resolvedColor = getTemplateTextColor(content) ?? DEFAULT_TEMPLATE_TEXT_COLOR
   const [resolvedBranding, setResolvedBranding] = useState<OrganisationBranding | null>(null)
   const [isPreparing, setIsPreparing] = useState(true)
+  const [isDownloading, setIsDownloading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -634,33 +634,53 @@ export function TemplatePdfDownloadButton({
 
   const safeFilename = `${(name || 'template').replace(/[^a-zA-Z0-9-_ ]/g, '').trim() || 'template'}.pdf`
 
-  if (isPreparing) {
-    return (
-      <button
-        type="button"
-        disabled
-        className={className}
-      >
-        Preparing PDF…
-      </button>
-    )
-  }
+  async function handleDownload() {
+    if (isDownloading || isPreparing) return
 
-  return (
-    <PDFDownloadLink
-      document={
+    setIsDownloading(true)
+    try {
+      const { pdf } = await import('@react-pdf/renderer')
+      const blob = await pdf(
         <TemplatePdfDocument
           content={content}
           name={name}
           textColor={resolvedColor}
           organisationBranding={resolvedBranding}
         />
-      }
-      fileName={safeFilename}
+      ).toBlob()
+      const objectUrl = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = objectUrl
+      anchor.download = safeFilename
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+    } catch (err) {
+      console.error('[TemplatePdfDownloadButton]', err)
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
+  if (isPreparing) {
+    return (
+      <button type="button" disabled className={className}>
+        Preparing PDF…
+      </button>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={isDownloading}
+      onClick={() => void handleDownload()}
       className={className}
+      aria-busy={isDownloading}
     >
-      {({ loading }) => (loading ? 'Preparing PDF…' : 'Download PDF')}
-    </PDFDownloadLink>
+      {isDownloading ? 'Preparing PDF…' : 'Download PDF'}
+    </button>
   )
 }
 

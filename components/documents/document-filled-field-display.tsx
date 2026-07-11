@@ -11,6 +11,8 @@ interface DocumentFilledFieldDisplayProps {
   attrs: FormFieldAttrs
   value: unknown
   signatureDataUrl?: string | null
+  /** When true, this signature field was completed via physical upload. */
+  physicallySigned?: boolean
   fileUrl?: string | null
 }
 
@@ -53,11 +55,23 @@ export function DocumentFilledFieldDisplay({
   attrs,
   value,
   signatureDataUrl,
+  physicallySigned = false,
   fileUrl,
 }: DocumentFilledFieldDisplayProps) {
   const displayLabel = getFieldDisplayLabel(attrs)
 
   if (attrs.fieldType === 'signature') {
+    if (physicallySigned) {
+      return (
+        <span className="mx-1 inline-flex flex-col gap-1 align-middle">
+          <span className="text-xs font-medium text-signara-navy">{displayLabel}</span>
+          <span className="inline-flex min-h-12 min-w-[140px] items-center justify-center rounded-md border border-signara-gold/50 bg-signara-gold/10 px-3 py-2 text-sm font-semibold tracking-wide text-signara-navy">
+            APPROVED
+          </span>
+        </span>
+      )
+    }
+
     if (signatureDataUrl) {
       return (
         <span className="mx-1 inline-flex flex-col gap-1 align-middle">

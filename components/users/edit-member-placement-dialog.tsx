@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -36,6 +37,7 @@ import type { UserWithDepartment } from '@/types/database'
 import { OverseenDepartmentsField } from '@/components/users/overseen-departments-field'
 
 const editPlacementSchema = z.object({
+  position: z.string().max(120, { message: 'Position must be 120 characters or fewer' }),
   department_id: z.string().uuid({ message: 'Select a department' }),
   job_level: z.enum(JOB_LEVELS, { message: 'Select a job level' }),
 })
@@ -65,6 +67,7 @@ export function EditMemberPlacementDialog({
     member.department_id ?? departments.find((d) => !d.is_executive)?.id ?? departments[0]?.id ?? ''
 
   const {
+    register,
     handleSubmit,
     setValue,
     watch,
@@ -73,6 +76,7 @@ export function EditMemberPlacementDialog({
   } = useForm<EditPlacementFormValues>({
     resolver: zodResolver(editPlacementSchema),
     defaultValues: {
+      position: member.position ?? '',
       department_id: defaultDepartmentId,
       job_level: member.job_level,
     },
@@ -118,6 +122,7 @@ export function EditMemberPlacementDialog({
   function handleOpenChange(isOpen: boolean) {
     if (isOpen) {
       reset({
+        position: member.position ?? '',
         department_id: defaultDepartmentId,
         job_level: member.job_level,
       })
@@ -132,6 +137,7 @@ export function EditMemberPlacementDialog({
 
     const result = await updateMemberPlacement({
       userId: member.id,
+      position: values.position.trim() || null,
       department_id: values.department_id,
       job_level: values.job_level,
       overseen_department_ids: overseenDepartmentIds,
@@ -142,7 +148,7 @@ export function EditMemberPlacementDialog({
       return
     }
 
-    toast.success(`${member.full_name}'s placement updated`)
+    toast.success(`${member.full_name}'s details updated`)
     setOpen(false)
     onSuccess()
   }
@@ -155,7 +161,7 @@ export function EditMemberPlacementDialog({
         size="icon"
         className="text-signara-steel hover:text-signara-navy"
         onClick={() => handleOpenChange(true)}
-        aria-label={`Edit ${member.full_name}'s department and job level`}
+        aria-label={`Edit ${member.full_name}'s position, department and job level`}
       >
         <Pencil className="size-4" />
       </Button>
@@ -163,10 +169,11 @@ export function EditMemberPlacementDialog({
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[480px]">
           <DialogHeader className="shrink-0 border-b border-signara-steel/20 px-6 pt-6 pb-4">
-            <DialogTitle className="text-signara-navy">Edit department & job level</DialogTitle>
+            <DialogTitle className="text-signara-navy">Edit member</DialogTitle>
             <DialogDescription className="text-signara-steel">
-              Update where {member.full_name} sits in your organisation. This affects which approval
-              steps they can receive.
+              Update {member.full_name}&apos;s position and where they sit in your organisation.
+              Position appears when they are mentioned; department and job level affect approval
+              routing.
             </DialogDescription>
           </DialogHeader>
 
@@ -175,6 +182,26 @@ export function EditMemberPlacementDialog({
             <div className="rounded-md border border-signara-steel/25 bg-signara-background/60 px-4 py-3">
               <p className="text-sm font-medium text-signara-navy">{member.full_name}</p>
               <p className="text-xs text-signara-steel">{member.email}</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor={`position-${member.id}`} className="text-signara-navy font-medium">
+                Position
+              </Label>
+              <Input
+                id={`position-${member.id}`}
+                placeholder="e.g. Human Resources Officer"
+                {...register('position')}
+                aria-invalid={!!errors.position}
+                className="border-signara-steel focus-visible:ring-signara-navy"
+              />
+              <p className="text-xs text-signara-steel">
+                Optional — shown when they are mentioned (e.g. {member.full_name} - Human Resources
+                Officer).
+              </p>
+              {errors.position && (
+                <p className="text-destructive text-xs">{errors.position.message}</p>
+              )}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

@@ -46,6 +46,8 @@ export interface User {
   id: string
   email: string
   full_name: string
+  /** Optional job title shown when mentioning the user (e.g. "Human Resources Officer"). */
+  position?: string | null
   organisation_id: string
   role: 'admin' | 'member'
   avatar_url: string | null
@@ -146,7 +148,14 @@ export interface Template {
   content: TiptapDocument | null
   workflow: Workflow
   scope: TemplateScope
+  /** Access restriction when scope is `department`; null for organisation-wide access. */
   department_id: string | null
+  /**
+   * Department whose archive completed documents from this template are filed under.
+   * Null means organisation-wide (visible to anyone with archive access).
+   * Independent of `scope` / `department_id` access control.
+   */
+  archive_department_id?: string | null
   created_by: string
   version: number
   is_active: boolean
@@ -177,6 +186,13 @@ export interface Document {
    * (e.g. `{orgId}/{documentId}/final.pdf`), set when the document completes.
    */
   final_pdf_url?: string | null
+  /**
+   * Storage path of the physically signed scan (print-and-sign), when completed
+   * via physical upload. Same bucket as attachments.
+   */
+  physical_signature_url?: string | null
+  /** True once the document is filed in the department archive. */
+  archived?: boolean
   created_at: string
   updated_at: string
 }

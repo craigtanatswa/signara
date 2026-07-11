@@ -1,6 +1,7 @@
 import { CheckCircle2, Clock, MinusCircle, XCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { parseStepNotes } from '@/lib/workflow/step-notes'
+import { formatUserDisplayName } from '@/lib/users/display-name'
 import { JOB_LEVEL_LABELS } from '@/types/org-structure'
 import type { JobLevel } from '@/types/org-structure'
 import type { DocumentStep } from '@/types/database'
@@ -8,6 +9,7 @@ import type { DocumentStep } from '@/types/database'
 export interface ApprovalProgressStep extends DocumentStep {
   users: {
     full_name: string
+    position: string | null
     email: string
     job_level: JobLevel
     departments: { name: string } | null
@@ -63,7 +65,9 @@ function StepStatusIcon({ status }: { status: DocumentStep['status'] }) {
 }
 
 function stepOutcomeText(step: ApprovalProgressStep): string | null {
-  const name = step.users?.full_name ?? 'Approver'
+  const name = step.users
+    ? formatUserDisplayName(step.users.full_name, step.users.position)
+    : 'Approver'
   const meta = parseStepNotes(step.notes)
 
   switch (step.status) {
@@ -111,7 +115,11 @@ export function ApprovalProgress({ steps, isInitiator = false }: ApprovalProgres
   } else if (approvedCount === totalCount && totalCount > 0) {
     summary = `All ${totalCount} approver${totalCount === 1 ? '' : 's'} have signed`
   } else if (activeStep) {
-    summary = `${approvedCount} of ${totalCount} approved — currently with ${activeStep.users?.full_name ?? 'the next approver'}`
+    summary = `${approvedCount} of ${totalCount} approved — currently with ${
+      activeStep.users
+        ? formatUserDisplayName(activeStep.users.full_name, activeStep.users.position)
+        : 'the next approver'
+    }`
   } else {
     summary = `${approvedCount} of ${totalCount} approved`
   }
@@ -176,7 +184,10 @@ export function ApprovalProgress({ steps, isInitiator = false }: ApprovalProgres
                     <StepStatusIcon status={step.status} />
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-signara-navy">
-                        Step {index + 1}: {assignee?.full_name ?? 'Unassigned'}
+                        Step {index + 1}:{' '}
+                        {assignee
+                          ? formatUserDisplayName(assignee.full_name, assignee.position)
+                          : 'Unassigned'}
                       </p>
                       {assignee?.email && (
                         <p className="text-xs text-signara-steel">{assignee.email}</p>

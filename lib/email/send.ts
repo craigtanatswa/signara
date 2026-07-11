@@ -36,8 +36,17 @@ export async function sendTransactionalEmail(input: {
   }
 }
 
+/** Absolute base URL for the app (no trailing slash). */
+export function getAppBaseUrl(): string {
+  return (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+}
+
 /** Absolute URL to a document detail page. */
 export function getDocumentUrl(documentId: string): string {
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-  return `${base}/dashboard/documents/${documentId}`
+  return `${getAppBaseUrl()}/dashboard/documents/${documentId}`
+}
+
+/** Absolute URL to the public document verification page. */
+export function getVerifyDocumentUrl(documentId: string): string {
+  return `${getAppBaseUrl()}/verify/${documentId}`
 }

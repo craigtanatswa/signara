@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
           .maybeSingle(),
         supabase
           .from('users')
-          .select('full_name')
+          .select('full_name, position')
           .eq('id', document.initiated_by)
           .maybeSingle(),
         supabase
@@ -157,6 +157,12 @@ Deno.serve(async (req) => {
         continue
       }
 
+      const initiatorName = initiator?.full_name
+        ? initiator.position?.trim()
+          ? `${initiator.full_name} - ${initiator.position.trim()}`
+          : initiator.full_name
+        : 'A colleague'
+
       const appUrl = (Deno.env.get('APP_URL') ?? Deno.env.get('NEXT_PUBLIC_APP_URL') ?? '').replace(
         /\/$/,
         ''
@@ -165,7 +171,7 @@ Deno.serve(async (req) => {
       const email = buildApprovalNeededEmail({
         approverName: approver.full_name,
         documentTitle: document.title,
-        initiatorName: initiator?.full_name ?? 'A colleague',
+        initiatorName,
         orgName: org?.name ?? 'your organisation',
         documentUrl,
         authorityText: notes.authorityText ?? '',

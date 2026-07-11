@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 import { approveDocumentStepsBatch } from '@/app/actions/approvals'
-import { saveSignatureForFutureUse } from '@/lib/signatures/save-for-future-use'
 import { SignaturePad } from '@/components/documents/signature-pad'
 import { Button } from '@/components/ui/button'
 import { ErrorMessage } from '@/components/ui/error-message'
@@ -51,40 +50,49 @@ export function BulkApprovalBar({ selected, onClearSelection }: BulkApprovalBarP
   function handleApprove() {
     setError(null)
     startTransition(async () => {
-      const result = await approveDocumentStepsBatch({
-        items: selected.map((row) => ({
-          documentId: row.id,
-          stepId: row.stepId,
-        })),
-        signatureDataUrl,
-      })
+      try {
+        const result = await approveDocumentStepsBatch({
+          items: selected.map((row) => ({
+            documentId: row.id,
+            stepId: row.stepId,
+          })),
+          signatureDataUrl,
+          signatureMethod,
+        })
 
-      if (result.error) {
-        setError(result.error)
-        return
-      }
+        if (result.error) {
+          setError(result.error)
+          return
+        }
 
-      if (result.approved > 0) {
-        await saveSignatureForFutureUse(signatureDataUrl, signatureMethod)
-        toast.success(
-          result.approved === 1
-            ? '1 document approved'
-            : `${result.approved} documents approved`
+        if (result.approved > 0) {
+          toast.success(
+            result.approved === 1
+              ? '1 document approved'
+              : `${result.approved} documents approved`
+          )
+        }
+
+        if (result.failed.length > 0) {
+          toast.error(
+            result.failed.length === 1
+              ? `1 document could not be approved: ${result.failed[0].error}`
+              : `${result.failed.length} documents could not be approved`
+          )
+        }
+
+        setOpen(false)
+        setSignatureDataUrl(null)
+        onClearSelection()
+        router.refresh()
+      } catch (err) {
+        console.error('[BulkApprovalBar] approve failed', err)
+        setError(
+          err instanceof Error && err.message
+            ? err.message
+            : 'Approval failed. Please try again.'
         )
       }
-
-      if (result.failed.length > 0) {
-        toast.error(
-          result.failed.length === 1
-            ? `1 document could not be approved: ${result.failed[0].error}`
-            : `${result.failed.length} documents could not be approved`
-        )
-      }
-
-      setOpen(false)
-      setSignatureDataUrl(null)
-      onClearSelection()
-      router.refresh()
     })
   }
 
@@ -138,6 +146,7 @@ export function BulkApprovalBar({ selected, onClearSelection }: BulkApprovalBarP
 
           {requiresSignature && (
             <SignaturePad
+              value={signatureDataUrl}
               onChange={(dataUrl, method) => {
                 setSignatureDataUrl(dataUrl)
                 if (method) setSignatureMethod(method)

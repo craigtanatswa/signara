@@ -53,6 +53,7 @@ interface TemplateSnapshotInput {
   content: TiptapDocument | null
   scope: TemplateScope
   departmentId: string | null
+  archiveDepartmentId: string | null
 }
 
 function buildSnapshot({
@@ -62,6 +63,7 @@ function buildSnapshot({
   content,
   scope,
   departmentId,
+  archiveDepartmentId,
 }: TemplateSnapshotInput): string {
   return JSON.stringify({
     name: name.trim(),
@@ -70,8 +72,11 @@ function buildSnapshot({
     content: JSON.stringify(normalizeTemplateContent(content)),
     scope,
     departmentId,
+    archiveDepartmentId,
   })
 }
+
+const ARCHIVE_ORG_VALUE = '__organisation__'
 
 export function TemplateEditClient({
   template,
@@ -87,6 +92,9 @@ export function TemplateEditClient({
   const [isActive, setIsActive] = useState(template?.is_active ?? false)
   const [scope, setScope] = useState<TemplateScope>(template?.scope ?? 'organisation')
   const [departmentId, setDepartmentId] = useState<string>(template?.department_id ?? '')
+  const [archiveDepartmentId, setArchiveDepartmentId] = useState<string>(
+    template?.archive_department_id ?? ''
+  )
   const { departments, loading: departmentsLoading } = useDepartments()
   const [useOrganisationLogo, setUseOrganisationLogo] = useState(() =>
     getTemplateUsesOrganisationLogo(template?.content ?? null)
@@ -122,6 +130,7 @@ export function TemplateEditClient({
         : null,
       scope: template?.scope ?? 'organisation',
       departmentId: template?.department_id ?? null,
+      archiveDepartmentId: template?.archive_department_id ?? null,
     })
   )
 
@@ -236,8 +245,17 @@ export function TemplateEditClient({
   }
 
   const currentSnapshot = useMemo(
-    () => buildSnapshot({ name, description, isActive, content, scope, departmentId: departmentId || null }),
-    [name, description, isActive, content, scope, departmentId]
+    () =>
+      buildSnapshot({
+        name,
+        description,
+        isActive,
+        content,
+        scope,
+        departmentId: departmentId || null,
+        archiveDepartmentId: archiveDepartmentId || null,
+      }),
+    [name, description, isActive, content, scope, departmentId, archiveDepartmentId]
   )
   const isDirty = isContentDirty || currentSnapshot !== baselineSnapshot
   const hasTitle = name.trim().length > 0
@@ -283,6 +301,7 @@ export function TemplateEditClient({
         is_active: options.asDraft ? false : isActive,
         scope,
         department_id: scope === 'department' ? departmentId : null,
+        archive_department_id: archiveDepartmentId || null,
       }
 
       const templateId = savedId ?? template?.id
@@ -303,6 +322,7 @@ export function TemplateEditClient({
             content: normalizedContent,
             scope: payload.scope,
             departmentId: payload.department_id,
+            archiveDepartmentId: payload.archive_department_id,
           })
         )
         setContent(normalizedContent)
@@ -334,6 +354,7 @@ export function TemplateEditClient({
           content: normalizedContent,
           scope: payload.scope,
           departmentId: payload.department_id,
+          archiveDepartmentId: payload.archive_department_id,
         })
       )
       setContent(normalizedContent)
@@ -356,6 +377,7 @@ export function TemplateEditClient({
       template,
       scope,
       departmentId,
+      archiveDepartmentId,
     ]
   )
 
@@ -452,7 +474,7 @@ export function TemplateEditClient({
                 rows={1}
                 className="h-[2.75rem] min-h-[2.75rem] resize-none overflow-y-auto border-signara-steel/30 bg-white px-3 py-2 text-base text-signara-navy shadow-none placeholder:text-signara-steel focus-visible:border-signara-navy focus-visible:ring-2 focus-visible:ring-signara-navy/20"
               />
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Label htmlFor="template-scope" className="shrink-0 text-sm font-medium text-signara-navy">
                   Who can use this
                 </Label>
@@ -465,7 +487,7 @@ export function TemplateEditClient({
                 >
                   <SelectTrigger
                     id="template-scope"
-                    className="h-9 min-w-0 flex-1 border-signara-steel/30 bg-white text-signara-navy"
+                    className="h-9 min-w-[10rem] flex-1 border-signara-steel/30 bg-white text-signara-navy"
                   >
                     <SelectValue />
                   </SelectTrigger>
@@ -476,7 +498,7 @@ export function TemplateEditClient({
                 </Select>
                 {scope === 'department' && (
                   <Select value={departmentId} onValueChange={setDepartmentId}>
-                    <SelectTrigger className="h-9 min-w-0 flex-1 border-signara-steel/30 bg-white text-signara-navy">
+                    <SelectTrigger className="h-9 min-w-[10rem] flex-1 border-signara-steel/30 bg-white text-signara-navy">
                       <SelectValue placeholder={departmentsLoading ? 'Loading…' : 'Select department'} />
                     </SelectTrigger>
                     <SelectContent>
@@ -488,6 +510,33 @@ export function TemplateEditClient({
                     </SelectContent>
                   </Select>
                 )}
+                <Label
+                  htmlFor="template-archive-department"
+                  className="shrink-0 text-sm font-medium text-signara-navy sm:ml-2"
+                >
+                  Archive under
+                </Label>
+                <Select
+                  value={archiveDepartmentId || ARCHIVE_ORG_VALUE}
+                  onValueChange={(value) =>
+                    setArchiveDepartmentId(value === ARCHIVE_ORG_VALUE ? '' : value)
+                  }
+                >
+                  <SelectTrigger
+                    id="template-archive-department"
+                    className="h-9 min-w-[10rem] flex-1 border-signara-steel/30 bg-white text-signara-navy"
+                  >
+                    <SelectValue placeholder={departmentsLoading ? 'Loading…' : 'Select archive'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ARCHIVE_ORG_VALUE}>Organisation-wide</SelectItem>
+                    {departments.map((department) => (
+                      <SelectItem key={department.id} value={department.id}>
+                        {department.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

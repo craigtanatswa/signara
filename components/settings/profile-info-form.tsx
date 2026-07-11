@@ -72,6 +72,14 @@ export function ProfileInfoForm({ user, organisation }: ProfileInfoFormProps) {
         )}
       </div>
 
+      {/* Read-only: position */}
+      <div className="space-y-1.5">
+        <Label className="text-signara-navy font-medium">Position</Label>
+        <div className="flex h-10 items-center">
+          <span className="text-sm text-signara-navy">{user.position?.trim() || '—'}</span>
+        </div>
+      </div>
+
       {/* Read-only: department & job level */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
@@ -92,7 +100,7 @@ export function ProfileInfoForm({ user, organisation }: ProfileInfoFormProps) {
         </div>
       </div>
       <p className="text-xs text-signara-steel">
-        Department and job level are managed by your organisation admin.
+        Position, department, and job level are managed by your organisation admin.
       </p>
 
       {/* Read-only: email */}

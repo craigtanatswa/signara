@@ -3,7 +3,9 @@ import type { SignatureCaptureMethod } from '@/types/database'
 
 /**
  * Persist a signature to the user's library after an explicit confirm
- * (Save / Approve / Submit). Failures are logged and never block the action.
+ * (Save button on the pad). Prefer folding library saves into approve/submit
+ * server actions for those flows — sequential client actions can break RSC.
+ * Failures are logged and never block the action.
  */
 export async function saveSignatureForFutureUse(
   dataUrl: string | null | undefined,

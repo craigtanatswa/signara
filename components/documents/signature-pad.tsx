@@ -104,6 +104,8 @@ export function SignaturePad({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const librarySavedRef = useRef<string | null>(null)
   const appliedDefaultRef = useRef(false)
+  const valueRef = useRef(value)
+  valueRef.current = value
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
 
@@ -126,7 +128,7 @@ export function SignaturePad({
     void ensureSignatureFonts()
   }, [])
 
-  // Load saved signatures once; auto-apply default for one-click reuse.
+  // Load saved signatures once; auto-apply default so the field is pre-filled.
   useEffect(() => {
     if (!preferSaved) {
       setSavedLoading(false)
@@ -151,15 +153,15 @@ export function SignaturePad({
         librarySavedRef.current = defaultSig.image_data
       }
 
-      // Auto-apply default when the pad is empty so the user can continue immediately.
-      if (!appliedDefaultRef.current && !value && defaultSig) {
+      // Pre-fill when the pad is still empty; user can Clear to sign differently.
+      if (!appliedDefaultRef.current && !valueRef.current && defaultSig) {
         appliedDefaultRef.current = true
         setSelectedSavedId(defaultSig.id)
         setLastMethod(defaultSig.method)
         setMode('saved')
         setIsEditing(false)
         onChangeRef.current(defaultSig.image_data, defaultSig.method)
-      } else if (result.signatures.length > 0 && !value) {
+      } else if (result.signatures.length > 0 && !valueRef.current) {
         setMode('saved')
       }
     })
@@ -167,27 +169,19 @@ export function SignaturePad({
     return () => {
       cancelled = true
     }
-    // Only on mount / preferSaved change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preferSaved])
 
+  // Collapse to preview once the parent reflects an auto-applied / selected saved signature.
   useEffect(() => {
-    if (mode !== 'saved' || !isEditing || saved.length > 0 || savedLoading) return
-    let cancelled = false
-    setSavedLoading(true)
-    void listMySignatures().then((result) => {
-      if (cancelled) return
-      setSavedLoading(false)
-      if (!result.error) setSaved(result.signatures)
-    })
-    return () => {
-      cancelled = true
+    if (!value) {
+      // Keep preview pending while a library signature is selected but value hasn't arrived yet.
+      if (!selectedSavedId) setIsEditing(true)
+      return
     }
-  }, [mode, isEditing, saved.length, savedLoading])
-
-  useEffect(() => {
-    if (!value) setIsEditing(true)
-  }, [value])
+    if (selectedSavedId) {
+      setIsEditing(false)
+    }
+  }, [value, selectedSavedId])
 
   function emit(dataUrl: string | null, method: SignatureCaptureMethod) {
     setLastMethod(method)

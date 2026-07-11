@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { InviteUserDialog } from '@/components/users/invite-user-dialog'
 import { EditMemberPlacementDialog } from '@/components/users/edit-member-placement-dialog'
 import { RemoveMemberDialog } from '@/components/users/remove-member-dialog'
+import { ActivateMemberDialog } from '@/components/users/activate-member-dialog'
+import { ResetPasswordDialog } from '@/components/users/reset-password-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -207,6 +209,9 @@ export function TeamClient({
                         <p className="truncate text-sm font-medium text-signara-navy">
                           {member.full_name}
                         </p>
+                        {member.position?.trim() ? (
+                          <p className="truncate text-xs text-signara-steel">{member.position}</p>
+                        ) : null}
                         <p className="truncate text-xs text-signara-steel">{member.email}</p>
                       </div>
                     </div>
@@ -259,6 +264,15 @@ export function TeamClient({
 
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-0.5">
+                      <ActivateMemberDialog
+                        member={member}
+                        onSuccess={() => router.refresh()}
+                      />
+                      <ResetPasswordDialog
+                        member={member}
+                        currentUserId={currentUserId}
+                        onSuccess={() => router.refresh()}
+                      />
                       <EditMemberPlacementDialog
                         member={member}
                         departments={departments}

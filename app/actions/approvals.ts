@@ -1,5 +1,6 @@
 'use server'
 
+import { after } from 'next/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
@@ -13,10 +14,17 @@ import {
   notifyDocumentRejected,
 } from '@/lib/workflow/notify-routing'
 import { generateAndStoreFinalPdf } from '@/lib/pdf/generate-document-pdf'
-import type { Document, DocumentStep } from '@/types/database'
+import { tryPersistSignatureForFutureUse } from '@/lib/signatures/persist-for-user'
+import { formatUserDisplayName } from '@/lib/users/display-name'
+import type { Document, DocumentStep, SignatureCaptureMethod } from '@/types/database'
 
 type AdminClient = Awaited<ReturnType<typeof createAdminClient>>
-type AuthProfile = { id: string; organisation_id: string; full_name: string }
+type AuthProfile = {
+  id: string
+  organisation_id: string
+  full_name: string
+  position: string | null
+}
 
 const rejectReasonSchema = z
   .string()
@@ -39,7 +47,7 @@ async function getAuthenticatedUser() {
 
   const { data: profile } = await admin
     .from('users')
-    .select('id, organisation_id, full_name')
+    .select('id, organisation_id, full_name, position')
     .eq('id', authUser.id)
     .single()
 
@@ -78,6 +86,7 @@ async function approveDocumentStepInternal(
     documentId: string
     stepId: string
     signatureDataUrl?: string | null
+    signatureMethod?: SignatureCaptureMethod
     comment?: string | null
   }
 ): Promise<{ error?: string; documentId?: string }> {
@@ -154,35 +163,42 @@ async function approveDocumentStepInternal(
 
     const { data: initiator } = await supabase
       .from('users')
-      .select('full_name')
+      .select('full_name, position')
       .eq('id', document.initiated_by)
       .maybeSingle()
 
     // Email + in-app notification — failures must not block advancement.
-    await notifyApproverForStep({
-      document,
-      step: { ...nextStep, status: 'pending' },
-      initiatorName: initiator?.full_name ?? 'A colleague',
-    }).catch((err) => console.error('[approveDocumentStep] notify next', err))
+    after(() => {
+      void notifyApproverForStep({
+        document,
+        step: { ...nextStep, status: 'pending' },
+        initiatorName: initiator
+          ? formatUserDisplayName(initiator.full_name, initiator.position)
+          : 'A colleague',
+      }).catch((err) => console.error('[approveDocumentStep] notify next', err))
+    })
   } else {
     await supabase
       .from('documents')
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),
+        archived: true,
         updated_at: new Date().toISOString(),
       })
       .eq('id', document.id)
 
-    // Persist an immutable final PDF — failures must not block completion.
-    await generateAndStoreFinalPdf({
-      documentId: document.id,
-      organisationId: document.organisation_id,
-    }).catch((err) => console.error('[approveDocumentStep] final PDF', err))
+    // Persist final PDF + notify after the response — do not block approval UX.
+    after(() => {
+      void generateAndStoreFinalPdf({
+        documentId: document.id,
+        organisationId: document.organisation_id,
+      }).catch((err) => console.error('[approveDocumentStep] final PDF', err))
 
-    await notifyDocumentCompleted({ document }).catch((err) =>
-      console.error('[approveDocumentStep] notify complete', err)
-    )
+      void notifyDocumentCompleted({ document }).catch((err) =>
+        console.error('[approveDocumentStep] notify complete', err)
+      )
+    })
   }
 
   revalidatePath(`/dashboard/documents/${document.id}`)
@@ -193,6 +209,7 @@ export async function approveDocumentStep(input: {
   documentId: string
   stepId: string
   signatureDataUrl?: string | null
+  signatureMethod?: SignatureCaptureMethod
   comment?: string | null
 }) {
   const { supabase, profile } = await getAuthenticatedUser()
@@ -201,6 +218,19 @@ export async function approveDocumentStep(input: {
   if (result.error) {
     return { error: result.error }
   }
+
+  const signatureDataUrl = input.signatureDataUrl
+  const signatureMethod = input.signatureMethod
+  const userId = profile.id
+
+  after(() => {
+    void tryPersistSignatureForFutureUse({
+      userId,
+      imageData: signatureDataUrl,
+      method: signatureMethod,
+      supabase,
+    })
+  })
 
   revalidatePath('/dashboard/documents')
   revalidatePath('/dashboard')
@@ -215,6 +245,7 @@ export async function approveDocumentStep(input: {
 export async function approveDocumentStepsBatch(input: {
   items: Array<{ documentId: string; stepId: string }>
   signatureDataUrl?: string | null
+  signatureMethod?: SignatureCaptureMethod
 }): Promise<{
   approved: number
   failed: Array<{ documentId: string; error: string }>
@@ -244,12 +275,27 @@ export async function approveDocumentStepsBatch(input: {
       documentId: item.documentId,
       stepId: item.stepId,
       signatureDataUrl: input.signatureDataUrl,
+      signatureMethod: input.signatureMethod,
     })
     if (result.error) {
       failed.push({ documentId: item.documentId, error: result.error })
     } else {
       approved += 1
     }
+  }
+
+  if (approved > 0) {
+    const signatureDataUrl = input.signatureDataUrl
+    const signatureMethod = input.signatureMethod
+    const userId = profile.id
+    after(() => {
+      void tryPersistSignatureForFutureUse({
+        userId,
+        imageData: signatureDataUrl,
+        method: signatureMethod,
+        supabase,
+      })
+    })
   }
 
   revalidatePath('/dashboard/documents')
@@ -337,7 +383,7 @@ export async function rejectDocumentStep(input: {
 
   await notifyDocumentRejected({
     document,
-    rejectedByName: profile.full_name,
+    rejectedByName: formatUserDisplayName(profile.full_name, profile.position),
     reason,
   }).catch((err) => console.error('[rejectDocumentStep] notify', err))
 

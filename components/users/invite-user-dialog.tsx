@@ -37,6 +37,7 @@ import { OverseenDepartmentsField } from '@/components/users/overseen-department
 
 const inviteSchema = z.object({
   full_name: z.string().min(2, { message: 'Full name must be at least 2 characters' }),
+  position: z.string().max(120, { message: 'Position must be 120 characters or fewer' }).optional(),
   email: z.union([
     z.literal(''),
     z.string().email({ message: 'Please enter a valid email address' }),
@@ -87,6 +88,8 @@ export function InviteUserDialog({
   } = useForm<InviteFormValues>({
     resolver: zodResolver(inviteSchema),
     defaultValues: {
+      full_name: '',
+      position: '',
       email: '',
       role: 'member',
       department_id: defaultDepartmentId,
@@ -148,6 +151,7 @@ export function InviteUserDialog({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...values,
+        position: values.position?.trim() || null,
         overseen_department_ids: overseenDepartmentIds,
       }),
     })
@@ -160,6 +164,8 @@ export function InviteUserDialog({
     }
 
     reset({
+      full_name: '',
+      position: '',
       email: '',
       role: 'member',
       department_id: defaultDepartmentId,
@@ -184,6 +190,8 @@ export function InviteUserDialog({
   function handleOpenChange(isOpen: boolean) {
     if (!isOpen) {
       reset({
+        full_name: '',
+        position: '',
         email: '',
         role: 'member',
         department_id: defaultDepartmentId,
@@ -229,6 +237,25 @@ export function InviteUserDialog({
             />
             {errors.full_name && (
               <p className="text-destructive text-xs">{errors.full_name.message}</p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="invite_position" className="text-signara-navy font-medium">
+              Position
+            </Label>
+            <Input
+              id="invite_position"
+              placeholder="e.g. Human Resources Officer"
+              {...register('position')}
+              aria-invalid={!!errors.position}
+              className="border-signara-steel focus-visible:ring-signara-navy"
+            />
+            <p className="text-xs text-signara-steel">
+              Optional — shown when they are mentioned (e.g. Jane Smith - Human Resources Officer).
+            </p>
+            {errors.position && (
+              <p className="text-destructive text-xs">{errors.position.message}</p>
             )}
           </div>
 

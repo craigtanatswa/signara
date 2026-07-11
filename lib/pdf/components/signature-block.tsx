@@ -103,7 +103,7 @@ export function SignatureBlock({ entries }: { entries: SignatureBlockEntry[] }) 
             {entry.isPhysical || !entry.imageSrc ? (
               <View style={styles.physicalBox}>
                 <Text style={styles.physicalLabel}>
-                  {entry.isPhysical ? 'Physically signed' : 'Signature unavailable'}
+                  {entry.isPhysical ? 'APPROVED' : 'Signature unavailable'}
                 </Text>
               </View>
             ) : (

@@ -12,6 +12,7 @@ import {
   isTemplateRequestMime,
 } from '@/lib/storage/template-request-attachments'
 import { canRequestTemplate } from '@/lib/templates/can-request-template'
+import { formatUserDisplayName } from '@/lib/users/display-name'
 import { isJobLevel, type JobLevel } from '@/types/org-structure'
 import type { TemplateRequest, TemplateRequestStatus } from '@/types/database'
 
@@ -24,7 +25,7 @@ async function getAuthenticatedUser() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('id, organisation_id, role, department_id, job_level, full_name, email')
+    .select('id, organisation_id, role, department_id, job_level, full_name, position, email')
     .eq('id', authUser.id)
     .single()
 
@@ -198,7 +199,7 @@ export async function createTemplateRequest(input: {
         user_id: admin.id,
         type: 'template_request',
         title: 'New template request',
-        message: `${profile.full_name} requested a "${title}" template for ${department.name}.`,
+        message: `${formatUserDisplayName(profile.full_name, profile.position)} requested a "${title}" template for ${department.name}.`,
       }))
     )
   }
@@ -233,7 +234,10 @@ function mapTemplateRequestRows(
           : 'Unknown department',
       requesterName:
         requester && typeof requester === 'object' && 'full_name' in requester
-          ? String(requester.full_name)
+          ? formatUserDisplayName(
+              String(requester.full_name),
+              'position' in requester ? (requester.position as string | null) : null
+            )
           : 'Unknown',
       requesterJobLevel:
         requester &&
@@ -259,7 +263,7 @@ const TEMPLATE_REQUEST_LIST_SELECT = `
   department_id,
   requested_by,
   departments ( name ),
-  requester:users!requested_by ( full_name, job_level )
+  requester:users!requested_by ( full_name, position, job_level )
 `
 
 export interface TemplateRequestListItem {

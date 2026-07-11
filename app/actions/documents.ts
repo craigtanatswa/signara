@@ -25,6 +25,7 @@ import {
 } from '@/lib/workflow/signature-fields'
 import { formatStepPolicyLabel, normaliseWorkflow } from '@/types/workflow'
 import { loadOverseenDepartmentIdsByUser } from '@/lib/org-structure/load-overseen'
+import { formatUserDisplayName } from '@/lib/users/display-name'
 import { JOB_LEVEL_LABELS, isJobLevel, type JobLevel } from '@/types/org-structure'
 import {
   DOCUMENT_ATTACHMENTS_BUCKET,
@@ -33,7 +34,14 @@ import {
   getDocumentAttachmentPath,
 } from '@/lib/storage/document-attachments'
 import type { OrganisationUserOption, Workflow } from '@/types/workflow'
-import type { Template, Document, DocumentStep, TiptapDocument } from '@/types/database'
+import type {
+  Template,
+  Document,
+  DocumentStep,
+  TiptapDocument,
+  SignatureCaptureMethod,
+} from '@/types/database'
+import { tryPersistSignatureForFutureUse } from '@/lib/signatures/persist-for-user'
 
 async function getAuthenticatedUser() {
   const supabase = await createClient()
@@ -44,7 +52,7 @@ async function getAuthenticatedUser() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('id, organisation_id, role, department_id, job_level, full_name, email')
+    .select('id, organisation_id, role, department_id, job_level, full_name, position, email')
     .eq('id', authUser.id)
     .single()
 
@@ -70,8 +78,9 @@ async function loadOrganisationUsers(
   ] = await Promise.all([
     supabase
       .from('users')
-      .select('id, full_name, email, department_id, job_level')
-      .eq('organisation_id', organisationId),
+      .select('id, full_name, position, email, department_id, job_level')
+      .eq('organisation_id', organisationId)
+      .eq('must_change_password', false),
     loadOverseenDepartmentIdsByUser(supabase, organisationId),
     supabase.from('departments').select('id, name').eq('organisation_id', organisationId),
   ])
@@ -90,6 +99,7 @@ async function loadOrganisationUsers(
   const users = (orgUsers ?? []).map((user) => ({
     id: user.id,
     full_name: user.full_name,
+    position: (user.position as string | null) ?? null,
     email: user.email,
     department_id: user.department_id,
     department_name: user.department_id ? (departmentsById.get(user.department_id) ?? null) : null,
@@ -105,7 +115,9 @@ export async function getActiveTemplatesForInitiation() {
 
   const { data, error } = await supabase
     .from('templates')
-    .select('id, name, description, workflow, is_active, scope, department_id, departments(name), updated_at')
+    .select(
+      'id, name, description, workflow, is_active, scope, department_id, departments!templates_department_id_fkey(name), updated_at'
+    )
     .eq('organisation_id', profile.organisation_id)
     .eq('is_active', true)
     .order('name')
@@ -562,7 +574,14 @@ export async function saveInitiatorSignature(input: {
   return { success: true }
 }
 
-export async function submitDocumentForApproval(documentId: string) {
+export async function submitDocumentForApproval(input: {
+  documentId: string
+  /** When provided, writes the initiator signature onto the document before submit. */
+  signatureDataUrl?: string | null
+  signatureMethod?: SignatureCaptureMethod
+}) {
+  const { documentId, signatureDataUrl, signatureMethod } = input
+
   const { supabase, profile } = await getAuthenticatedUser()
 
   const loaded = await loadDocumentForInitiator(
@@ -579,9 +598,31 @@ export async function submitDocumentForApproval(documentId: string) {
     return { error: 'This document has already been submitted.' }
   }
 
+  // Persist initiator signature onto the document in the same round-trip when provided.
+  let documentData = document.data ?? {}
+  if (signatureDataUrl !== undefined) {
+    const initiatorField = getInitiatorSignatureField(document.templates?.content ?? null)
+    if (initiatorField) {
+      const nextData = { ...documentData }
+      if (signatureDataUrl) {
+        nextData[initiatorField.fieldId] = signatureDataUrl
+      } else {
+        delete nextData[initiatorField.fieldId]
+      }
+      const { error: sigError } = await supabase
+        .from('documents')
+        .update({ data: nextData, updated_at: new Date().toISOString() })
+        .eq('id', document.id)
+      if (sigError) {
+        return { error: sigError.message }
+      }
+      documentData = nextData
+    }
+  }
+
   const signatureError = getMissingInitiatorSignatureError(
     document.templates?.content ?? null,
-    document.data
+    documentData
   )
   if (signatureError) {
     return { error: signatureError }
@@ -619,8 +660,24 @@ export async function submitDocumentForApproval(documentId: string) {
   await notifyApproverForStep({
     document,
     step: { ...firstStep, status: 'pending' },
-    initiatorName: profile.full_name,
+    initiatorName: formatUserDisplayName(profile.full_name, profile.position),
   }).catch((err) => console.error('[submitDocumentForApproval] notify', err))
+
+  const librarySignature =
+    signatureDataUrl ??
+    (() => {
+      const field = getInitiatorSignatureField(document.templates?.content ?? null)
+      if (!field) return null
+      const value = documentData[field.fieldId]
+      return typeof value === 'string' ? value : null
+    })()
+
+  await tryPersistSignatureForFutureUse({
+    userId: profile.id,
+    imageData: librarySignature,
+    method: signatureMethod,
+    supabase,
+  })
 
   revalidatePath(`/dashboard/documents/${document.id}`)
   revalidatePath('/dashboard/documents')

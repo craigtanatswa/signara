@@ -31,8 +31,11 @@ export async function GET() {
   const [{ data: users, error }, overseenByUser] = await Promise.all([
     supabase
       .from('users')
-      .select('id, full_name, email, department_id, job_level, departments!users_department_id_fkey(name)')
+      .select(
+        'id, full_name, position, email, department_id, job_level, departments!users_department_id_fkey(name)'
+      )
       .eq('organisation_id', currentUser.organisation_id)
+      .eq('must_change_password', false)
       .order('full_name'),
     loadOverseenDepartmentIdsByUser(supabase, currentUser.organisation_id),
   ])
@@ -52,6 +55,7 @@ export async function GET() {
     return {
       id: user.id,
       full_name: user.full_name,
+      position: (user.position as string | null) ?? null,
       email: user.email,
       department_id: user.department_id,
       department_name: departmentName,

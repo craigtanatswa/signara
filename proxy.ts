@@ -27,9 +27,23 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Server Actions POSTs must not be redirected to HTML login pages — that
+  // surfaces as "An unexpected response was received from the server."
+  const isServerAction = request.headers.has('next-action')
+
+  let user: { id: string } | null = null
+  try {
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser()
+    user = authUser
+  } catch (err) {
+    // Transient Supabase outages must not turn action POSTs into HTML errors.
+    console.error('[proxy] auth.getUser failed', err)
+    if (isServerAction) {
+      return supabaseResponse
+    }
+  }
 
   const { pathname } = request.nextUrl
 
@@ -45,7 +59,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (isDashboardRoute && !user) {
+  if (isDashboardRoute && !user && !isServerAction) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
@@ -57,7 +71,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (isChangePasswordRoute && !user) {
+  if (isChangePasswordRoute && !user && !isServerAction) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

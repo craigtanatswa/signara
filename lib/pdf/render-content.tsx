@@ -131,6 +131,33 @@ export function createExecutedContentStyles(textColor: string) {
       color: '#A1A8A2',
       minWidth: 140,
     },
+    /** Empty wet-signature box for print-and-sign PDFs. */
+    signHereBox: {
+      borderWidth: 1.5,
+      borderStyle: 'solid',
+      borderColor: '#0F2C59',
+      borderRadius: 2,
+      height: 64,
+      minWidth: 180,
+      maxWidth: 260,
+      marginBottom: 6,
+      backgroundColor: '#FFFFFF',
+    },
+    signHereName: {
+      fontSize: 10,
+      fontFamily: 'Helvetica-Bold',
+      color: textColor,
+    },
+    signHereRole: {
+      fontSize: 8,
+      color: '#A1A8A2',
+      marginTop: 2,
+    },
+    signHereDate: {
+      fontSize: 9,
+      color: textColor,
+      marginTop: 6,
+    },
     tableContainer: {
       marginVertical: 8,
       borderWidth: 1,
@@ -244,11 +271,18 @@ function getBlockStyle(node: TiptapNode, baseStyle: Style): Style {
   })
 }
 
+export interface PrintReadyEmptySignature {
+  assigneeName: string
+  roleLabel: string
+}
+
 export interface RenderContentContext {
   fieldValues: Record<string, unknown>
   signaturesByFieldId: Record<string, string | null>
   textColor: string
   styles: PdfStyles
+  /** When set, these signature fields render as empty "Sign here" boxes. */
+  printReadyEmptySignatures?: Record<string, PrintReadyEmptySignature>
 }
 
 function renderInlineContent(
@@ -325,6 +359,17 @@ function renderFormField(
   const value = ctx.fieldValues[attrs.fieldId]
 
   if (attrs.fieldType === 'signature') {
+    const emptySign = ctx.printReadyEmptySignatures?.[attrs.fieldId]
+    if (emptySign) {
+      // Print-and-sign: show only the field label for the final signature for now
+      // (box + assignee name temporarily removed).
+      return (
+        <Text key={key} style={styles.formFieldSignatureLabel}>
+          {label}
+        </Text>
+      )
+    }
+
     const imageSrc = ctx.signaturesByFieldId[attrs.fieldId] ?? null
     if (imageSrc) {
       return (
@@ -338,7 +383,7 @@ function renderFormField(
 
     const pending =
       value === 'physical'
-        ? 'Physically signed'
+        ? 'APPROVED'
         : attrs.signatureRole === 'initiator'
           ? `${label} — not signed`
           : `${label} — awaiting signature`
@@ -535,7 +580,8 @@ export function renderTiptapToPdf(
   fieldValues: Record<string, unknown>,
   signaturesByFieldId: Record<string, string | null> = {},
   textColor = '#000000',
-  _layout?: PageLayout
+  _layout?: PageLayout,
+  printReadyEmptySignatures?: Record<string, PrintReadyEmptySignature>
 ): ReactNode {
   const styles = createExecutedContentStyles(textColor)
   const ctx: RenderContentContext = {
@@ -543,6 +589,7 @@ export function renderTiptapToPdf(
     signaturesByFieldId,
     textColor,
     styles,
+    printReadyEmptySignatures,
   }
 
   return (content.content ?? []).map((node, index) =>

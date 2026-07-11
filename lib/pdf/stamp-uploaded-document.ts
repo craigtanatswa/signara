@@ -162,3 +162,49 @@ export async function mergePdfBuffers(
   const saved = await base.save()
   return Buffer.from(saved)
 }
+
+const A4_WIDTH_PT = 595.28
+const A4_HEIGHT_PT = 841.89
+
+/**
+ * Turn a stored attachment (PDF or raster image) into a PDF buffer so it can
+ * be merged after an audit-trail page.
+ */
+export async function bytesToPdfDocument(
+  bytes: Buffer | Uint8Array,
+  hint: { contentType?: string; path?: string }
+): Promise<Buffer> {
+  const lowerPath = (hint.path ?? '').toLowerCase()
+  const type = (hint.contentType ?? '').toLowerCase()
+  const isPdf =
+    type === 'application/pdf' ||
+    lowerPath.endsWith('.pdf') ||
+    (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46)
+
+  if (isPdf) {
+    // Re-save through pdf-lib to normalise / validate.
+    const loaded = await PDFDocument.load(bytes)
+    return Buffer.from(await loaded.save())
+  }
+
+  const pdfDoc = await PDFDocument.create()
+  const isPng = type.includes('png') || lowerPath.endsWith('.png')
+  const image = isPng ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes)
+
+  const page = pdfDoc.addPage([A4_WIDTH_PT, A4_HEIGHT_PT])
+  const margin = 28
+  const maxW = A4_WIDTH_PT - margin * 2
+  const maxH = A4_HEIGHT_PT - margin * 2
+  const scale = Math.min(maxW / image.width, maxH / image.height, 1)
+  const width = image.width * scale
+  const height = image.height * scale
+  page.drawImage(image, {
+    x: (A4_WIDTH_PT - width) / 2,
+    y: (A4_HEIGHT_PT - height) / 2,
+    width,
+    height,
+  })
+
+  return Buffer.from(await pdfDoc.save())
+}
+

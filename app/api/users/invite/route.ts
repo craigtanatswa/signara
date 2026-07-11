@@ -30,6 +30,9 @@ const inviteSchema = z.object({
     z.string().email({ message: 'Invalid email address' }),
   ]),
   full_name: z.string().min(2, { message: 'Full name must be at least 2 characters' }),
+  position: z
+    .union([z.string().max(120, { message: 'Position must be 120 characters or fewer' }), z.null()])
+    .optional(),
   role: z.enum(['admin', 'member']),
   department_id: z.string().uuid({ message: 'Select a department' }),
   job_level: z.enum(JOB_LEVELS, { message: 'Select a job level' }),
@@ -73,9 +76,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { email: rawEmail, full_name, role, department_id, job_level, overseen_department_ids } =
-      parsed.data
+    const {
+      email: rawEmail,
+      full_name,
+      position: rawPosition,
+      role,
+      department_id,
+      job_level,
+      overseen_department_ids,
+    } = parsed.data
     const email = rawEmail.trim() || generateTestEmail(full_name)
+    const position = rawPosition?.trim() || null
 
     const { data: departments } = await supabase
       .from('departments')
@@ -149,6 +160,7 @@ export async function POST(request: NextRequest) {
       id: newUserId,
       email,
       full_name,
+      position,
       organisation_id: currentUser.organisation_id,
       role,
       department_id,

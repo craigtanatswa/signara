@@ -121,6 +121,21 @@ export function ExecutedDocument({
 
   return (
     <Document title={documentTitle} author={organisationName} creator="Signara">
+      {includeAuditTrail ? (
+        <AuditTrailPage
+          organisationName={organisationName}
+          logoSrc={auditLogoSrc}
+          documentTitle={documentTitle}
+          documentId={document.id}
+          initiatedByName={initiatedByName}
+          initiatedAt={document.created_at}
+          completedAt={document.completed_at}
+          rejectedAt={rejectedAt}
+          documentStatus={document.status}
+          steps={auditSteps}
+        />
+      ) : null}
+
       <Page size="A4" orientation={pageOrientation} style={styles.page} wrap>
         {letterheadSrc ? (
           // eslint-disable-next-line jsx-a11y/alt-text -- decorative background layer in PDF output
@@ -146,21 +161,6 @@ export function ExecutedDocument({
           </View>
         </View>
       </Page>
-
-      {includeAuditTrail ? (
-        <AuditTrailPage
-          organisationName={organisationName}
-          logoSrc={auditLogoSrc}
-          documentTitle={documentTitle}
-          documentId={document.id}
-          initiatedByName={initiatedByName}
-          initiatedAt={document.created_at}
-          completedAt={document.completed_at}
-          rejectedAt={rejectedAt}
-          documentStatus={document.status}
-          steps={auditSteps}
-        />
-      ) : null}
     </Document>
   )
 }

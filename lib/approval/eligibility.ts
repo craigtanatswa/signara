@@ -14,6 +14,7 @@
 // own admin-set minimum job level and department scope.
 
 import { userBelongsToDepartment } from '@/lib/org-structure/overseen-departments'
+import { formatUserDisplayName } from '@/lib/users/display-name'
 import { meetsStepMinimumJobLevel, type JobLevel } from '@/types/org-structure'
 import type { TemplateScope } from '@/types/database'
 import type { OrganisationUserOption, Workflow, WorkflowStep } from '@/types/workflow'
@@ -219,13 +220,15 @@ export function validateApprovalChain(input: {
     }
 
     if (!isEligibleApprover(approver, initiator, step)) {
-      errors.push(`${approver.full_name} is not eligible to approve ${position.toLowerCase()}.`)
+      errors.push(
+        `${formatUserDisplayName(approver.full_name, approver.position)} is not eligible to approve ${position.toLowerCase()}.`
+      )
       return
     }
 
     if (seenUserIds.has(approver.id)) {
       errors.push(
-        `${approver.full_name} is already assigned to another step. Choose a different approver for ${position.toLowerCase()}.`
+        `${formatUserDisplayName(approver.full_name, approver.position)} is already assigned to another step. Choose a different approver for ${position.toLowerCase()}.`
       )
       return
     }

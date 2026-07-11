@@ -39,6 +39,29 @@ function validateTemplateScope(scope: TemplateScope, departmentId: string | null
   return null
 }
 
+async function resolveOrgDepartmentId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organisationId: string,
+  departmentId: string | null
+): Promise<{ departmentId: string | null; error?: string }> {
+  if (!departmentId) {
+    return { departmentId: null }
+  }
+
+  const { data: department } = await supabase
+    .from('departments')
+    .select('id')
+    .eq('id', departmentId)
+    .eq('organisation_id', organisationId)
+    .maybeSingle()
+
+  if (!department) {
+    return { departmentId: null, error: 'Selected department was not found in your organisation.' }
+  }
+
+  return { departmentId: department.id }
+}
+
 // ─── Create ──────────────────────────────────────────────────────────────────
 
 export async function createTemplate(data: {
@@ -48,6 +71,7 @@ export async function createTemplate(data: {
   is_active: boolean
   scope?: TemplateScope
   department_id?: string | null
+  archive_department_id?: string | null
 }) {
   const { supabase, profile } = await getAuthenticatedAdmin()
   const nameError = validateTemplateName(data.name)
@@ -62,6 +86,22 @@ export async function createTemplate(data: {
     return { error: scopeError }
   }
 
+  if (departmentId) {
+    const accessDept = await resolveOrgDepartmentId(supabase, profile.organisation_id, departmentId)
+    if (accessDept.error) {
+      return { error: accessDept.error }
+    }
+  }
+
+  const archiveDept = await resolveOrgDepartmentId(
+    supabase,
+    profile.organisation_id,
+    data.archive_department_id ?? null
+  )
+  if (archiveDept.error) {
+    return { error: archiveDept.error }
+  }
+
   const { data: template, error } = await supabase
     .from('templates')
     .insert({
@@ -72,6 +112,7 @@ export async function createTemplate(data: {
       workflow: { steps: [] } satisfies Workflow,
       scope,
       department_id: departmentId,
+      archive_department_id: archiveDept.departmentId,
       created_by: profile.id,
       version: 1,
       is_active: data.is_active,
@@ -84,6 +125,7 @@ export async function createTemplate(data: {
   }
 
   revalidatePath('/dashboard/templates')
+  revalidatePath('/dashboard/archive')
   return { id: template.id }
 }
 
@@ -98,6 +140,7 @@ export async function updateTemplate(
     is_active: boolean
     scope?: TemplateScope
     department_id?: string | null
+    archive_department_id?: string | null
   }
 ) {
   const { supabase, profile } = await getAuthenticatedAdmin()
@@ -111,6 +154,22 @@ export async function updateTemplate(
   const scopeError = validateTemplateScope(scope, departmentId)
   if (scopeError) {
     return { error: scopeError }
+  }
+
+  if (departmentId) {
+    const accessDept = await resolveOrgDepartmentId(supabase, profile.organisation_id, departmentId)
+    if (accessDept.error) {
+      return { error: accessDept.error }
+    }
+  }
+
+  const archiveDept = await resolveOrgDepartmentId(
+    supabase,
+    profile.organisation_id,
+    data.archive_department_id ?? null
+  )
+  if (archiveDept.error) {
+    return { error: archiveDept.error }
   }
 
   // Fetch current version to increment it
@@ -134,6 +193,7 @@ export async function updateTemplate(
       is_active: data.is_active,
       scope,
       department_id: departmentId,
+      archive_department_id: archiveDept.departmentId,
       version: (existing.version ?? 1) + 1,
       updated_at: new Date().toISOString(),
     })
@@ -145,6 +205,7 @@ export async function updateTemplate(
   }
 
   revalidatePath('/dashboard/templates')
+  revalidatePath('/dashboard/archive')
   return { success: true }
 }
 
@@ -193,6 +254,7 @@ export async function duplicateTemplate(id: string) {
       workflow: source.workflow ?? ({ steps: [] } satisfies Workflow),
       scope: source.scope ?? 'organisation',
       department_id: source.department_id ?? null,
+      archive_department_id: source.archive_department_id ?? null,
       created_by: profile.id,
       version: 1,
       is_active: false,

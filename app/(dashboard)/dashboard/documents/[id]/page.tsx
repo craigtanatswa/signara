@@ -23,8 +23,10 @@ import { parseStepNotes } from '@/lib/workflow/step-notes'
 import { buildDocumentPreviewContext } from '@/lib/documents/build-preview-context'
 import { loadDocumentForViewer } from '@/lib/documents/load-for-viewer'
 import { DocumentInstancePreview } from '@/components/documents/document-instance-preview'
-import { DocumentPdfButton } from '@/components/documents/document-pdf-button'
+// import { DocumentPdfButton } from '@/components/documents/document-pdf-button'
+import { isFinalStep } from '@/lib/workflow/step-helpers'
 import { isJobLevel, type JobLevel } from '@/types/org-structure'
+import { formatUserDisplayName } from '@/lib/users/display-name'
 import type { User, Document } from '@/types/database'
 
 interface DocumentPageProps {
@@ -86,11 +88,14 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
       ? await admin
           .from('users')
           // Disambiguate: users also link to departments via user_overseen_departments.
-          .select('id, full_name, email, job_level, departments!users_department_id_fkey(name)')
+          .select(
+            'id, full_name, position, email, job_level, departments!users_department_id_fkey(name)'
+          )
           .in('id', assigneeIds)
       : { data: [] as Array<{
           id: string
           full_name: string
+          position: string | null
           email: string
           job_level: string
           departments: { name: string } | { name: string }[] | null
@@ -103,6 +108,7 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
         row.id,
         {
           full_name: row.full_name,
+          position: row.position ?? null,
           email: row.email,
           job_level: (isJobLevel(row.job_level) ? row.job_level : 'staff') as JobLevel,
           departments: dept ? { name: dept.name } : null,
@@ -118,7 +124,7 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
 
   const { data: initiator } = await admin
     .from('users')
-    .select('full_name, departments!users_department_id_fkey(name)')
+    .select('full_name, position, departments!users_department_id_fkey(name)')
     .eq('id', document.initiated_by)
     .maybeSingle()
 
@@ -181,6 +187,22 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
     }),
   ])
 
+  // Prefer the uploaded physical scan — same file as Archive "Approved document".
+  let physicalSignaturePath: string | null = document.physical_signature_url ?? null
+  if (!physicalSignaturePath && document.status === 'completed') {
+    const physicalStep = [...rawSteps]
+      .sort((a, b) => b.step_order - a.step_order)
+      .find((step) => {
+        if (step.status !== 'approved') return false
+        const notes = parseStepNotes(step.notes)
+        const url = step.signature_url
+        if (!notes.physicalSignature || !url) return false
+        if (url.startsWith('data:image/') || url === 'physical') return false
+        return true
+      })
+    physicalSignaturePath = physicalStep?.signature_url ?? null
+  }
+
   return (
     <>
       <Header pageTitle={document.title} user={user} />
@@ -204,7 +226,9 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
                   templateContent={document.templates?.content ?? null}
                   organisationBranding={organisationBranding}
                   preview={previewContext}
+                  physicalSignaturePath={physicalSignaturePath}
                 />
+                {/* Preview / Download PDF temporarily disabled — use Preview document instead
                 {(document.status === 'completed' ||
                   document.status === 'in_progress' ||
                   document.status === 'rejected') && (
@@ -213,6 +237,7 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
                     mode={document.status === 'completed' ? 'download' : 'preview'}
                   />
                 )}
+                */}
                 <Badge variant="outline" className={STATUS_BADGE_CLASS[document.status]}>
                   {STATUS_LABEL[document.status]}
                 </Badge>
@@ -223,7 +248,9 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
               <div>
                 <dt className="text-signara-steel">Initiated by</dt>
                 <dd className="font-medium text-signara-navy">
-                  {initiator?.full_name ?? 'Unknown'}
+                  {initiator
+                    ? formatUserDisplayName(initiator.full_name, initiator.position)
+                    : 'Unknown'}
                 </dd>
               </div>
               <div>
@@ -312,6 +339,10 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
               stepId={activeStep.id}
               authorityText={parseStepNotes(activeStep.notes).authorityText ?? ''}
               requiresSignature={Boolean(activeStep.signature_field_id)}
+              isFinalStep={isFinalStep(
+                activeStep.step_order,
+                steps.filter((s) => s.status !== 'skipped').length
+              )}
             />
           )}
 

@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { InitiationStepInfo } from '@/app/actions/documents'
+import { formatUserDisplayName } from '@/lib/users/display-name'
 
 const SKIP_VALUE = '__skip__'
 
@@ -117,7 +118,7 @@ export function AssignApproversStep({
                       <SelectItem value={SKIP_VALUE}>Skip this step</SelectItem>
                       {options.map((approver) => (
                         <SelectItem key={approver.id} value={approver.id}>
-                          {approver.full_name}
+                          {formatUserDisplayName(approver.full_name, approver.position)}
                           {approver.department_name ? ` — ${approver.department_name}` : ''}
                         </SelectItem>
                       ))}

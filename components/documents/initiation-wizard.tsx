@@ -9,6 +9,7 @@ import {
   getDocumentInitiationContext,
   type InitiationStepInfo,
 } from '@/app/actions/documents'
+import { formatUserDisplayName } from '@/lib/users/display-name'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -177,7 +178,7 @@ export function InitiationWizard({
     const map = new Map<string, string>()
     for (const step of steps) {
       for (const approver of step.eligibleApprovers) {
-        map.set(approver.id, approver.full_name)
+        map.set(approver.id, formatUserDisplayName(approver.full_name, approver.position))
       }
     }
     return map

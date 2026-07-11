@@ -11,6 +11,7 @@ import {
   Users,
   Settings,
   LogOut,
+  Archive,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { User, Organisation } from '@/types/database'
@@ -28,6 +29,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/documents', label: 'Documents', icon: FileText },
+  { href: '/dashboard/archive', label: 'Archive', icon: Archive },
   { href: '/dashboard/requests', label: 'Requests', icon: Inbox },
   {
     href: '/dashboard/templates',

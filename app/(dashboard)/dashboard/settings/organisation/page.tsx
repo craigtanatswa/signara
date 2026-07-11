@@ -28,6 +28,7 @@ export default async function OrganisationSettingsPage() {
     id: userProfile.id,
     email: userProfile.email,
     full_name: userProfile.full_name,
+    position: userProfile.position ?? null,
     organisation_id: userProfile.organisation_id,
     role: userProfile.role,
     avatar_url: userProfile.avatar_url,

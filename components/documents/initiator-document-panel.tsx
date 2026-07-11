@@ -10,7 +10,6 @@ import {
   saveInitiatorSignature,
   submitDocumentForApproval,
 } from '@/app/actions/documents'
-import { saveSignatureForFutureUse } from '@/lib/signatures/save-for-future-use'
 import { SignaturePad } from '@/components/documents/signature-pad'
 import { Button } from '@/components/ui/button'
 import { ErrorMessage } from '@/components/ui/error-message'
@@ -60,32 +59,33 @@ export function InitiatorDocumentPanel({
   function handleSubmit() {
     setError(null)
     startTransition(async () => {
-      if (requiresInitiatorSignature) {
-        if (!signatureDataUrl && !hasSavedSignature) {
-          setError('Please sign in the box below before submitting.')
-          return
-        }
-
-        if (hasUnsavedSignature || (!hasSavedSignature && signatureDataUrl)) {
-          const saveResult = await saveInitiatorSignature({
-            documentId,
-            signatureDataUrl,
-          })
-          if (saveResult.error) {
-            setError(saveResult.error)
-            return
-          }
-        }
-      }
-
-      const result = await submitDocumentForApproval(documentId)
-      if (result.error) {
-        setError(result.error)
+      if (requiresInitiatorSignature && !signatureDataUrl && !hasSavedSignature) {
+        setError('Please sign in the box below before submitting.')
         return
       }
-      await saveSignatureForFutureUse(signatureDataUrl, signatureMethod)
-      toast.success('Document submitted for approval')
-      router.refresh()
+
+      try {
+        const result = await submitDocumentForApproval({
+          documentId,
+          // Always pass current pad value so submit is a single round-trip
+          // (document write + workflow advance + library save).
+          signatureDataUrl: requiresInitiatorSignature ? signatureDataUrl : undefined,
+          signatureMethod,
+        })
+        if (result.error) {
+          setError(result.error)
+          return
+        }
+        toast.success('Document submitted for approval')
+        router.refresh()
+      } catch (err) {
+        console.error('[InitiatorDocumentPanel] submit failed', err)
+        setError(
+          err instanceof Error && err.message
+            ? err.message
+            : 'Submit failed. Please try again.'
+        )
+      }
     })
   }
 

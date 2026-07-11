@@ -182,6 +182,8 @@ export function reindexSteps(steps: WorkflowStep[]): WorkflowStep[] {
 export interface OrganisationUserOption {
   id: string
   full_name: string
+  /** Optional job title for display mentions (e.g. "Human Resources Officer"). */
+  position?: string | null
   email: string
   department_id: string | null
   department_name: string | null

@@ -8,3 +8,5 @@ export {
 } from '@/app/actions/approvals'
 
 export { resubmitDocument, submitDocumentForApproval } from '@/app/actions/documents'
+
+export { completeWithPhysicalSignature } from '@/app/actions/physical-signature'
