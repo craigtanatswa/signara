@@ -241,6 +241,14 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
                 <Badge variant="outline" className={STATUS_BADGE_CLASS[document.status]}>
                   {STATUS_LABEL[document.status]}
                 </Badge>
+                {document.archived && (
+                  <Badge
+                    variant="outline"
+                    className="border-signara-steel/40 bg-signara-steel/10 text-signara-steel"
+                  >
+                    Archived
+                  </Badge>
+                )}
               </div>
             </div>
 

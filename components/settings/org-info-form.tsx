@@ -26,6 +26,11 @@ import type { Organisation, Plan } from '@/types/database'
 
 const orgSchema = z.object({
   name: z.string().min(2, { message: 'Organisation name must be at least 2 characters' }),
+  archive_policy_months: z
+    .number({ error: 'Enter a whole number of months' })
+    .int({ message: 'Enter a whole number of months' })
+    .min(0, { message: 'Enter 0 to disable automatic archiving' })
+    .max(120, { message: 'Maximum is 120 months' }),
 })
 
 type OrgFormValues = z.infer<typeof orgSchema>
@@ -54,7 +59,10 @@ export function OrgInfoForm({ organisation, plan }: OrgInfoFormProps) {
     formState: { errors, isSubmitting, isDirty },
   } = useForm<OrgFormValues>({
     resolver: zodResolver(orgSchema),
-    defaultValues: { name: organisation.name },
+    defaultValues: {
+      name: organisation.name,
+      archive_policy_months: organisation.archive_policy_months ?? 12,
+    },
   })
 
   async function onSubmit(values: OrgFormValues) {
@@ -88,6 +96,36 @@ export function OrgInfoForm({ organisation, plan }: OrgInfoFormProps) {
           />
           {errors.name && (
             <p className="text-destructive text-xs">{errors.name.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-1.5 rounded-lg border border-signara-steel/30 bg-signara-background/40 p-4">
+          <Label htmlFor="archive_policy_months" className="text-signara-navy font-medium">
+            Hide documents from the main list after
+          </Label>
+          <p className="text-sm text-signara-steel">
+            Completed and rejected documents older than this period are automatically hidden
+            from the default Documents list. They remain available when users turn on{' '}
+            <span className="font-medium text-signara-navy">Show archived documents</span>, on
+            the Archive page, and can still be downloaded. Set to{' '}
+            <span className="font-medium text-signara-navy">0</span> to disable automatic
+            archiving — admins can still archive manually from the All tab.
+          </p>
+          <div className="flex items-center gap-2 pt-1">
+            <Input
+              id="archive_policy_months"
+              type="number"
+              min={0}
+              max={120}
+              step={1}
+              {...register('archive_policy_months', { valueAsNumber: true })}
+              aria-invalid={!!errors.archive_policy_months}
+              className="w-24 border-signara-steel focus-visible:ring-signara-navy"
+            />
+            <span className="text-sm text-signara-navy">months</span>
+          </div>
+          {errors.archive_policy_months && (
+            <p className="text-destructive text-xs">{errors.archive_policy_months.message}</p>
           )}
         </div>
 

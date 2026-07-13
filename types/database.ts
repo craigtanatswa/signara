@@ -20,6 +20,8 @@ export interface Organisation {
   brand_theme: BrandTheme
   plan_id: string | null
   trial_ends_at: string | null
+  /** Soft-archive completed/rejected docs older than this many months (default 12). */
+  archive_policy_months?: number
   created_at: string
   updated_at: string
 }

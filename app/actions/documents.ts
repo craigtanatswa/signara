@@ -799,3 +799,41 @@ export async function cancelDocument(documentId: string) {
 
   return { success: true }
 }
+
+/**
+ * Soft-archive documents (admin only). Non-destructive — hides from default
+ * list views; PDF download and detail access remain available.
+ */
+export async function bulkArchiveDocuments(input: {
+  documentIds: string[]
+}): Promise<{ archived: number; error?: string }> {
+  const ids = Array.from(new Set(input.documentIds.filter(Boolean)))
+  if (ids.length === 0) {
+    return { archived: 0, error: 'No documents selected' }
+  }
+
+  const { profile } = await getAuthenticatedUser()
+  if (profile.role !== 'admin') {
+    return { archived: 0, error: 'Only admins can archive documents' }
+  }
+
+  const admin = createAdminClient()
+  const now = new Date().toISOString()
+
+  const { data, error } = await admin
+    .from('documents')
+    .update({ archived: true, updated_at: now })
+    .in('id', ids)
+    .eq('organisation_id', profile.organisation_id)
+    .select('id')
+
+  if (error) {
+    return { archived: 0, error: error.message }
+  }
+
+  revalidatePath('/dashboard/documents')
+  revalidatePath('/dashboard/archive')
+
+  return { archived: data?.length ?? 0 }
+}
+

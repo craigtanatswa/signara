@@ -74,7 +74,7 @@ export default async function DashboardPage() {
         .eq('assignee_user_id', authUser.id),
     ])
 
-  const pendingCount = awaitingRows.length
+  const pendingCount = awaitingRows.total
   const sentCount = sentResult.count ?? 0
   const completedCount = completedResult.count ?? 0
 

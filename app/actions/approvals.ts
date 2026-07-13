@@ -183,7 +183,6 @@ async function approveDocumentStepInternal(
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),
-        archived: true,
         updated_at: new Date().toISOString(),
       })
       .eq('id', document.id)

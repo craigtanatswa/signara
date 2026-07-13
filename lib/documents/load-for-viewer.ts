@@ -1,4 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  dateToExclusiveUpperBound,
+  paginationRange,
+  type DocumentListFilters,
+} from '@/lib/documents/document-filters'
 import { formatUserDisplayName } from '@/lib/users/display-name'
 import type { Document, DocumentStep, Template } from '@/types/database'
 
@@ -6,9 +11,58 @@ type AdminClient = ReturnType<typeof createAdminClient>
 
 export type DocumentListRow = Pick<
   Document,
-  'id' | 'title' | 'status' | 'created_at' | 'initiated_by'
+  'id' | 'title' | 'status' | 'created_at' | 'initiated_by' | 'archived'
 > & {
   templates: { name: string } | { name: string }[] | null
+}
+
+export type DocumentListResult = {
+  rows: DocumentListRow[]
+  total: number
+}
+
+type DocumentFilterInput = Pick<
+  DocumentListFilters,
+  | 'search'
+  | 'templateIds'
+  | 'statuses'
+  | 'dateFrom'
+  | 'dateTo'
+  | 'initiatedBy'
+  | 'showArchived'
+  | 'page'
+>
+
+/** Apply shared list filters to a documents query builder. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyDocumentListFilters(query: any, filters: DocumentFilterInput) {
+  let next = query
+
+  if (!filters.showArchived) {
+    // Include false and null (legacy rows); exclude only explicitly archived.
+    next = next.or('archived.eq.false,archived.is.null')
+  }
+
+  if (filters.search) {
+    next = next.ilike('title', `%${filters.search}%`)
+  }
+  if (filters.templateIds.length > 0) {
+    next = next.in('template_id', filters.templateIds)
+  }
+  if (filters.statuses.length > 0) {
+    next = next.in('status', filters.statuses)
+  }
+  if (filters.dateFrom) {
+    next = next.gte('created_at', `${filters.dateFrom}T00:00:00.000Z`)
+  }
+  if (filters.dateTo) {
+    next = next.lt('created_at', dateToExclusiveUpperBound(filters.dateTo))
+  }
+  if (filters.initiatedBy) {
+    next = next.eq('initiated_by', filters.initiatedBy)
+  }
+
+  return next
 }
 
 export type AwaitingApprovalRow = {
@@ -26,8 +80,10 @@ export type AwaitingApprovalRow = {
 export async function loadAwaitingApprovalsForUser(input: {
   userId: string
   organisationId: string
-}): Promise<AwaitingApprovalRow[]> {
+  filters?: DocumentFilterInput
+}): Promise<{ rows: AwaitingApprovalRow[]; total: number }> {
   const admin = createAdminClient()
+  const filters = input.filters
 
   const { data: steps, error: stepsError } = await admin
     .from('document_steps')
@@ -37,34 +93,50 @@ export async function loadAwaitingApprovalsForUser(input: {
 
   if (stepsError) {
     console.error('[loadAwaitingApprovalsForUser] steps', stepsError.message)
-    return []
+    return { rows: [], total: 0 }
   }
 
-  if (!steps?.length) return []
+  if (!steps?.length) return { rows: [], total: 0 }
 
   const documentIds = Array.from(new Set(steps.map((step) => step.document_id)))
 
-  const { data: documents, error: docsError } = await admin
+  let docsQuery = admin
     .from('documents')
-    .select('id, title, status, created_at, initiated_by, templates(name)')
+    .select('id, title, status, created_at, initiated_by, archived, templates(name)')
     .in('id', documentIds)
     .eq('organisation_id', input.organisationId)
     .eq('status', 'in_progress')
+    .order('created_at', { ascending: false })
+
+  if (filters) {
+    // Status filter: awaiting is always in_progress — if user filtered to other
+    // statuses only, return empty. If in_progress is included (or no status filter), keep.
+    if (filters.statuses.length > 0 && !filters.statuses.includes('in_progress')) {
+      return { rows: [], total: 0 }
+    }
+    docsQuery = applyDocumentListFilters(docsQuery, {
+      ...filters,
+      // Already constrained to in_progress above
+      statuses: [],
+    })
+  }
+
+  const { data: documents, error: docsError } = await docsQuery
 
   if (docsError) {
     console.error('[loadAwaitingApprovalsForUser] documents', docsError.message)
-    return []
+    return { rows: [], total: 0 }
   }
 
   const documentById = new Map(
     ((documents ?? []) as DocumentListRow[]).map((doc) => [doc.id, doc])
   )
 
-  const rows: AwaitingApprovalRow[] = []
+  const allRows: AwaitingApprovalRow[] = []
   for (const step of steps) {
     const document = documentById.get(step.document_id)
     if (!document) continue
-    rows.push({
+    allRows.push({
       stepId: step.id,
       documentId: step.document_id,
       signatureFieldId: step.signature_field_id,
@@ -72,7 +144,19 @@ export async function loadAwaitingApprovalsForUser(input: {
     })
   }
 
-  return rows
+  // Sort by document created_at desc to match other lists
+  allRows.sort(
+    (a, b) =>
+      new Date(b.document.created_at).getTime() - new Date(a.document.created_at).getTime()
+  )
+
+  const total = allRows.length
+  if (!filters) {
+    return { rows: allRows, total }
+  }
+
+  const { start, pageSize } = paginationRange(filters.page)
+  return { rows: allRows.slice(start, start + pageSize), total }
 }
 
 /**
@@ -132,43 +216,102 @@ export async function loadDocumentForViewer(input: {
 /** Documents initiated by the user (org-scoped). */
 export async function loadInitiatedDocuments(
   admin: AdminClient,
-  input: { userId: string; organisationId: string; limit?: number }
-): Promise<DocumentListRow[]> {
-  const { data, error } = await admin
+  input: {
+    userId: string
+    organisationId: string
+    filters?: DocumentFilterInput
+    limit?: number
+  }
+): Promise<DocumentListResult> {
+  const filters = input.filters
+  const { start, end, pageSize } = filters
+    ? paginationRange(filters.page)
+    : { start: 0, end: (input.limit ?? 100) - 1, pageSize: input.limit ?? 100 }
+
+  let query = admin
     .from('documents')
-    .select('id, title, status, created_at, initiated_by, templates(name)')
+    .select('id, title, status, created_at, initiated_by, archived, templates(name)', {
+      count: 'exact',
+    })
     .eq('organisation_id', input.organisationId)
     .eq('initiated_by', input.userId)
     .order('created_at', { ascending: false })
-    .limit(input.limit ?? 100)
+    .range(start, end)
+
+  if (filters) {
+    query = applyDocumentListFilters(query, filters)
+  }
+
+  const { data, error, count } = await query
 
   if (error) {
     console.error('[loadInitiatedDocuments]', error.message)
-    return []
+    return { rows: [], total: 0 }
   }
 
-  return (data ?? []) as DocumentListRow[]
+  return {
+    rows: (data ?? []) as DocumentListRow[],
+    total: count ?? (data?.length ?? 0),
+  }
 }
 
 /** All org documents (admin list). */
 export async function loadOrganisationDocuments(
   admin: AdminClient,
   organisationId: string,
+  filters?: DocumentFilterInput,
   limit = 100
-): Promise<DocumentListRow[]> {
-  const { data, error } = await admin
+): Promise<DocumentListResult> {
+  const { start, end } = filters
+    ? paginationRange(filters.page)
+    : { start: 0, end: limit - 1 }
+
+  let query = admin
     .from('documents')
-    .select('id, title, status, created_at, initiated_by, templates(name)')
+    .select('id, title, status, created_at, initiated_by, archived, templates(name)', {
+      count: 'exact',
+    })
     .eq('organisation_id', organisationId)
     .order('created_at', { ascending: false })
-    .limit(limit)
+    .range(start, end)
+
+  if (filters) {
+    query = applyDocumentListFilters(query, filters)
+  }
+
+  const { data, error, count } = await query
 
   if (error) {
     console.error('[loadOrganisationDocuments]', error.message)
-    return []
+    return { rows: [], total: 0 }
   }
 
-  return (data ?? []) as DocumentListRow[]
+  return {
+    rows: (data ?? []) as DocumentListRow[],
+    total: count ?? (data?.length ?? 0),
+  }
+}
+
+/** Lightweight awaiting count for the tab badge (ignores list filters except archived). */
+export async function countAwaitingApprovalsForUser(input: {
+  userId: string
+  organisationId: string
+  showArchived?: boolean
+}): Promise<number> {
+  const result = await loadAwaitingApprovalsForUser({
+    ...input,
+    filters: {
+      search: '',
+      templateIds: [],
+      statuses: [],
+      dateFrom: null,
+      dateTo: null,
+      initiatedBy: null,
+      showArchived: input.showArchived ?? false,
+      page: 1,
+    },
+  })
+  return result.total
 }
 
 export async function loadStepProgressByDocument(

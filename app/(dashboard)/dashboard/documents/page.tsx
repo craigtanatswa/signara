@@ -1,13 +1,20 @@
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/header'
 import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
 import { Button } from '@/components/ui/button'
-import { DocumentsTabs, type DocumentRow, type AwaitingDocumentRow } from '@/components/documents/documents-tabs'
+import {
+  DocumentsTabs,
+  type DocumentRow,
+  type AwaitingDocumentRow,
+} from '@/components/documents/documents-tabs'
+import { DocumentFilters } from '@/components/documents/document-filters'
 import { Plus } from 'lucide-react'
 import {
+  countAwaitingApprovalsForUser,
   loadAwaitingApprovalsForUser,
   loadInitiatedDocuments,
   loadOrganisationDocuments,
@@ -15,7 +22,16 @@ import {
   loadUserNamesById,
   type DocumentListRow,
 } from '@/lib/documents/load-for-viewer'
+import {
+  documentFiltersActive,
+  parseDocumentListFilters,
+} from '@/lib/documents/document-filters'
+import { formatUserDisplayName } from '@/lib/users/display-name'
 import type { User, DocumentStep } from '@/types/database'
+
+interface DocumentsPageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}
 
 function getTemplateName(templates: DocumentListRow['templates']): string {
   const template = Array.isArray(templates) ? templates[0] : templates
@@ -32,7 +48,7 @@ function buildStepProgress(
   return { current, total: steps.length }
 }
 
-export default async function DocumentsPage() {
+export default async function DocumentsPage({ searchParams }: DocumentsPageProps) {
   const supabase = await createClient()
   const {
     data: { user: authUser },
@@ -49,33 +65,64 @@ export default async function DocumentsPage() {
   const user = profile as User
   const isAdmin = user.role === 'admin'
   const admin = createAdminClient()
+  const params = await searchParams
+
+  // Prefetch awaiting badge count so we can pick a sensible default tab
+  const awaitingBadgeCount = await countAwaitingApprovalsForUser({
+    userId: user.id,
+    organisationId: user.organisation_id,
+    showArchived: false,
+  })
+
+  const filters = parseDocumentListFilters(params, {
+    isAdmin,
+    defaultTab: awaitingBadgeCount > 0 ? 'awaiting' : 'mine',
+  })
+  const filtersActive = documentFiltersActive(filters)
 
   // Service-role reads: member RLS typically only lets users see documents they
   // initiated, which would hide "Awaiting my action" from assignees.
-  const [myDocs, awaitingRows, allDocs] = await Promise.all([
-    loadInitiatedDocuments(admin, {
-      userId: user.id,
-      organisationId: user.organisation_id,
-    }),
-    loadAwaitingApprovalsForUser({
-      userId: user.id,
-      organisationId: user.organisation_id,
-    }),
-    isAdmin ? loadOrganisationDocuments(admin, user.organisation_id) : Promise.resolve(null),
-  ])
+  const [myDocsResult, awaitingResult, allDocsResult, templatesResult, usersResult] =
+    await Promise.all([
+      loadInitiatedDocuments(admin, {
+        userId: user.id,
+        organisationId: user.organisation_id,
+        filters,
+      }),
+      loadAwaitingApprovalsForUser({
+        userId: user.id,
+        organisationId: user.organisation_id,
+        filters,
+      }),
+      isAdmin
+        ? loadOrganisationDocuments(admin, user.organisation_id, filters)
+        : Promise.resolve(null),
+      admin
+        .from('templates')
+        .select('id, name')
+        .eq('organisation_id', user.organisation_id)
+        .order('name'),
+      isAdmin
+        ? admin
+            .from('users')
+            .select('id, full_name, position')
+            .eq('organisation_id', user.organisation_id)
+            .order('full_name')
+        : Promise.resolve({ data: null }),
+    ])
 
   const allIds = Array.from(
     new Set([
-      ...myDocs.map((doc) => doc.id),
-      ...awaitingRows.map((row) => row.documentId),
-      ...(allDocs ?? []).map((doc) => doc.id),
+      ...myDocsResult.rows.map((doc) => doc.id),
+      ...awaitingResult.rows.map((row) => row.documentId),
+      ...(allDocsResult?.rows ?? []).map((doc) => doc.id),
     ])
   )
   const initiatorIds = Array.from(
     new Set([
-      ...myDocs.map((doc) => doc.initiated_by),
-      ...awaitingRows.map((row) => row.document.initiated_by),
-      ...(allDocs ?? []).map((doc) => doc.initiated_by),
+      ...myDocsResult.rows.map((doc) => doc.initiated_by),
+      ...awaitingResult.rows.map((row) => row.document.initiated_by),
+      ...(allDocsResult?.rows ?? []).map((doc) => doc.initiated_by),
     ])
   )
 
@@ -92,18 +139,42 @@ export default async function DocumentsPage() {
       status: doc.status,
       initiatorName: initiatorNameById.get(doc.initiated_by) ?? 'Unknown',
       createdAt: doc.created_at,
+      archived: Boolean(doc.archived),
       stepProgress:
         doc.status === 'in_progress' ? buildStepProgress(stepsByDocument.get(doc.id) ?? []) : null,
     }
   }
 
-  const myDocuments = myDocs.map(toRow)
-  const awaitingMyAction: AwaitingDocumentRow[] = awaitingRows.map((row) => ({
-    ...toRow(row.document),
-    stepId: row.stepId,
-    requiresSignature: Boolean(row.signatureFieldId),
+  const myDocuments = {
+    rows: myDocsResult.rows.map(toRow),
+    total: myDocsResult.total,
+  }
+  const awaitingMyAction = {
+    rows: awaitingResult.rows.map(
+      (row): AwaitingDocumentRow => ({
+        ...toRow(row.document),
+        stepId: row.stepId,
+        requiresSignature: Boolean(row.signatureFieldId),
+      })
+    ),
+    total: awaitingResult.total,
+  }
+  const allDocuments = allDocsResult
+    ? { rows: allDocsResult.rows.map(toRow), total: allDocsResult.total }
+    : null
+
+  const filterTemplates = (templatesResult.data ?? []).map((t) => ({
+    id: t.id as string,
+    name: t.name as string,
   }))
-  const allDocuments = allDocs ? allDocs.map(toRow) : null
+  const filterUsers = ((usersResult.data ?? []) as Array<{
+    id: string
+    full_name: string
+    position: string | null
+  }>).map((u) => ({
+    id: u.id,
+    name: formatUserDisplayName(u.full_name, u.position),
+  }))
 
   return (
     <>
@@ -125,11 +196,47 @@ export default async function DocumentsPage() {
             </Button>
           </div>
 
-          <DocumentsTabs
-            myDocuments={myDocuments}
-            awaitingMyAction={awaitingMyAction}
-            allDocuments={allDocuments}
-          />
+          <Suspense
+            fallback={
+              <div className="h-28 animate-pulse rounded-lg border border-signara-steel/30 bg-white shadow-sm" />
+            }
+          >
+            <DocumentFilters
+              templates={filterTemplates}
+              users={filterUsers}
+              showInitiatedBy={isAdmin}
+            />
+          </Suspense>
+
+          <Suspense
+            fallback={
+              <div className="h-64 animate-pulse rounded-lg border border-signara-steel/30 bg-white shadow-sm" />
+            }
+          >
+            <DocumentsTabs
+              myDocuments={myDocuments}
+              awaitingMyAction={awaitingMyAction}
+              allDocuments={allDocuments}
+              awaitingBadgeCount={awaitingBadgeCount}
+              page={filters.page}
+              filtersActive={filtersActive}
+              defaultTab={filters.tab}
+              selectionResetKey={[
+                filters.tab,
+                filters.page,
+                filters.search,
+                filters.templateIds.join(','),
+                filters.statuses.join(','),
+                filters.dateFrom ?? '',
+                filters.dateTo ?? '',
+                filters.initiatedBy ?? '',
+                filters.showArchived ? '1' : '0',
+                myDocuments.rows.map((r) => r.id).join(','),
+                awaitingMyAction.rows.map((r) => r.id).join(','),
+                (allDocuments?.rows ?? []).map((r) => r.id).join(','),
+              ].join('|')}
+            />
+          </Suspense>
         </div>
       </DashboardPageBody>
     </>

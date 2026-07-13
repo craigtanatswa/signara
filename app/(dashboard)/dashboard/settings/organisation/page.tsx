@@ -57,6 +57,7 @@ export default async function OrganisationSettingsPage() {
       : DEFAULT_BRAND_THEME,
     plan_id: orgData.plan_id,
     trial_ends_at: orgData.trial_ends_at,
+    archive_policy_months: orgData.archive_policy_months ?? 12,
     created_at: orgData.created_at,
     updated_at: orgData.updated_at,
   }
@@ -77,7 +78,7 @@ export default async function OrganisationSettingsPage() {
           <div className="border-b border-t-2 border-t-signara-gold border-signara-steel/20 px-6 py-4 rounded-t-lg">
             <h2 className="font-semibold text-signara-navy">Organisation settings</h2>
             <p className="mt-0.5 text-sm text-signara-steel">
-              Manage your organisation details and plan.
+              Manage your organisation details, document retention, and plan.
             </p>
           </div>
           <div className="p-6">

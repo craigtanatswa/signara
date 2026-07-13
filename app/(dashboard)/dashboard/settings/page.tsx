@@ -39,7 +39,7 @@ export default async function SettingsPage() {
       href: '/dashboard/settings/organisation',
       icon: Building2,
       title: 'Organisation',
-      description: 'Manage your organisation name, logo, and plan.',
+      description: 'Manage your organisation name, branding, document retention, and plan.',
       adminOnly: true,
       placeholder: false,
     },

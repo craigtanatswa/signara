@@ -161,7 +161,6 @@ export async function completeWithPhysicalSignature(formData: FormData): Promise
     .update({
       status: 'completed',
       completed_at: now,
-      archived: true,
       physical_signature_url: storagePath,
       updated_at: now,
     })

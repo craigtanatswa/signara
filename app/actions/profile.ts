@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { isBrandTheme, type BrandTheme } from '@/lib/brand-themes'
@@ -37,6 +38,7 @@ export async function updateProfile(data: {
 
 export async function updateOrganisation(data: {
   name: string
+  archive_policy_months: number
 }): Promise<ActionResult> {
   const supabase = await createClient()
 
@@ -62,14 +64,34 @@ export async function updateOrganisation(data: {
     return { success: false, error: 'Admin access required' }
   }
 
+  const name = data.name.trim()
+  if (name.length < 2) {
+    return { success: false, error: 'Organisation name must be at least 2 characters' }
+  }
+
+  const archivePolicyMonths = Math.round(Number(data.archive_policy_months))
+  if (!Number.isFinite(archivePolicyMonths) || archivePolicyMonths < 0 || archivePolicyMonths > 120) {
+    return {
+      success: false,
+      error: 'Archive period must be between 0 and 120 months',
+    }
+  }
+
   const { error } = await supabase
     .from('organisations')
-    .update({ name: data.name.trim() })
+    .update({
+      name,
+      archive_policy_months: archivePolicyMonths,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', userProfile.organisation_id)
 
   if (error) {
     return { success: false, error: error.message }
   }
+
+  revalidatePath('/dashboard/settings/organisation')
+  revalidatePath('/dashboard/documents')
 
   return { success: true, message: 'Organisation updated successfully' }
 }
