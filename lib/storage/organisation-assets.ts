@@ -10,12 +10,18 @@ export const BRANDING_IMAGE_TYPES = [
   'image/gif',
 ] as const
 
+export const LOGO_IMAGE_TYPES = [
+  ...BRANDING_IMAGE_TYPES,
+  'image/svg+xml',
+] as const
+
 export const LETTERHEAD_UPLOAD_TYPES = [
   ...BRANDING_IMAGE_TYPES,
   'application/pdf',
 ] as const
 
 export type BrandingAssetKind = 'logo' | 'letterhead' | 'letterhead-landscape'
+export type LogoUploadMime = (typeof LOGO_IMAGE_TYPES)[number]
 export type LetterheadUploadMime = (typeof LETTERHEAD_UPLOAD_TYPES)[number]
 
 export function getOrganisationAssetPath(
@@ -36,11 +42,17 @@ export function getExtensionFromMime(mime: string): string | null {
       return 'webp'
     case 'image/gif':
       return 'gif'
+    case 'image/svg+xml':
+      return 'svg'
     case 'application/pdf':
       return 'png'
     default:
       return null
   }
+}
+
+export function isLogoUploadMime(mime: string): mime is LogoUploadMime {
+  return LOGO_IMAGE_TYPES.includes(mime as LogoUploadMime)
 }
 
 export function isLetterheadUploadMime(mime: string): mime is LetterheadUploadMime {

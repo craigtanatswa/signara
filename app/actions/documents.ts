@@ -52,7 +52,7 @@ async function getAuthenticatedUser() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('id, organisation_id, role, department_id, job_level, full_name, position, email')
+    .select('id, organisation_id, role, department_id, department, job_level, full_name, position, email')
     .eq('id', authUser.id)
     .single()
 
@@ -80,7 +80,8 @@ async function loadOrganisationUsers(
       .from('users')
       .select('id, full_name, position, email, department_id, job_level')
       .eq('organisation_id', organisationId)
-      .eq('must_change_password', false),
+      .eq('must_change_password', false)
+      .eq('is_active', true),
     loadOverseenDepartmentIdsByUser(supabase, organisationId),
     supabase.from('departments').select('id, name').eq('organisation_id', organisationId),
   ])
@@ -113,26 +114,47 @@ async function loadOrganisationUsers(
 export async function getActiveTemplatesForInitiation() {
   const { supabase, profile } = await getAuthenticatedUser()
 
-  const { data, error } = await supabase
-    .from('templates')
-    .select(
-      'id, name, description, workflow, is_active, scope, department_id, departments!templates_department_id_fkey(name), updated_at'
-    )
-    .eq('organisation_id', profile.organisation_id)
-    .eq('is_active', true)
-    .order('name')
+  const [{ data, error }, { data: userDept }] = await Promise.all([
+    supabase
+      .from('templates')
+      .select(
+        'id, name, description, workflow, is_active, scope, department_id, allowed_departments, departments!templates_department_id_fkey(name), updated_at'
+      )
+      .eq('organisation_id', profile.organisation_id)
+      .eq('is_active', true)
+      .order('name'),
+    profile.department_id
+      ? supabase
+          .from('departments')
+          .select('name')
+          .eq('id', profile.department_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
 
   if (error) {
     return { error: error.message, templates: [] }
   }
 
+  const userDepartmentName =
+    userDept?.name ?? profile.department ?? null
+  const userDepartmentNameLower = userDepartmentName?.toLowerCase() ?? null
+
   const templates = (data ?? [])
     .filter((template) => (template.workflow as Workflow | null)?.steps?.length)
-    .filter(
-      (template) =>
+    .filter((template) => {
+      const allowed = template.allowed_departments as string[] | null
+      if (allowed && allowed.length > 0) {
+        if (!userDepartmentNameLower) return false
+        return allowed.some((name) => name.toLowerCase() === userDepartmentNameLower)
+      }
+
+      // Legacy single-department scope
+      return (
         template.scope !== 'department' ||
         template.department_id === profile.department_id
-    )
+      )
+    })
     .map((template) => {
       const rawDepartment = template.departments
       const department = Array.isArray(rawDepartment) ? rawDepartment[0] : rawDepartment

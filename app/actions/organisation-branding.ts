@@ -2,18 +2,18 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import sharp from 'sharp'
 import { createClient } from '@/lib/supabase/server'
 import { convertPdfFirstPageToPng } from '@/lib/letterhead/convert-pdf-to-png'
 import {
-  BRANDING_IMAGE_TYPES,
   getExtensionFromMime,
   getOrganisationAssetPath,
   getPublicAssetUrl,
   isLetterheadUploadMime,
+  isLogoUploadMime,
   LETTERHEAD_MAX_BYTES,
   LOGO_MAX_BYTES,
   ORGANISATION_ASSETS_BUCKET,
-  type BrandingAssetKind,
 } from '@/lib/storage/organisation-assets'
 import type { ActionResult } from '@/app/actions/profile'
 import type { PageOrientation } from '@/types/database'
@@ -53,8 +53,8 @@ function validateLogoFile(file: File): string | null {
     return 'No file selected.'
   }
 
-  if (!BRANDING_IMAGE_TYPES.includes(file.type as (typeof BRANDING_IMAGE_TYPES)[number])) {
-    return 'Please upload a PNG, JPEG, WebP, or GIF image.'
+  if (!isLogoUploadMime(file.type)) {
+    return 'Please upload a PNG, JPEG, or SVG image.'
   }
 
   if (file.size > LOGO_MAX_BYTES) {
@@ -80,77 +80,6 @@ function validateLetterheadFile(file: File): string | null {
   }
 
   return null
-}
-
-async function uploadBrandingAsset(
-  formData: FormData,
-  kind: BrandingAssetKind
-): Promise<BrandingUploadResult> {
-  const auth = await getAdminOrganisationId()
-  if ('error' in auth) {
-    return { success: false, error: auth.error ?? 'Unauthorized' }
-  }
-
-  const file = formData.get('file')
-  if (!(file instanceof File)) {
-    return { success: false, error: 'No file selected.' }
-  }
-
-  const validationError = validateLogoFile(file)
-  if (validationError) {
-    return { success: false, error: validationError }
-  }
-
-  const extension = getExtensionFromMime(file.type)
-  if (!extension) {
-    return { success: false, error: 'Unsupported image type.' }
-  }
-
-  const { supabase, organisationId } = auth
-  const path = getOrganisationAssetPath(organisationId, kind, extension)
-  const buffer = Buffer.from(await file.arrayBuffer())
-
-  const { error: uploadError } = await supabase.storage
-    .from(ORGANISATION_ASSETS_BUCKET)
-    .upload(path, buffer, {
-      upsert: true,
-      contentType: file.type,
-      cacheControl: '3600',
-    })
-
-  if (uploadError) {
-    return { success: false, error: uploadError.message }
-  }
-
-  const publicUrl = getPublicAssetUrl(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    `${path}?v=${Date.now()}`
-  )
-
-  const column =
-    kind === 'logo'
-      ? 'logo_url'
-      : kind === 'letterhead-landscape'
-        ? 'letterhead_landscape_url'
-        : 'letterhead_url'
-  const { error: updateError } = await supabase
-    .from('organisations')
-    .update({ [column]: publicUrl })
-    .eq('id', organisationId)
-
-  if (updateError) {
-    return { success: false, error: updateError.message }
-  }
-
-  revalidatePath('/dashboard/settings/organisation')
-  revalidatePath('/dashboard/templates/new')
-  revalidatePath('/dashboard/templates')
-
-  return {
-    success: true,
-    url: publicUrl,
-    message: kind === 'logo' ? 'Logo uploaded successfully.' : 'Letterhead uploaded successfully.',
-  }
 }
 
 async function uploadLetterheadAsset(
@@ -253,7 +182,86 @@ async function uploadLetterheadAsset(
 export async function uploadOrganisationLogo(
   formData: FormData
 ): Promise<BrandingUploadResult> {
-  return uploadBrandingAsset(formData, 'logo')
+  const auth = await getAdminOrganisationId()
+  if ('error' in auth) {
+    return { success: false, error: auth.error ?? 'Unauthorized' }
+  }
+
+  const file = formData.get('file')
+  if (!(file instanceof File)) {
+    return { success: false, error: 'No file selected.' }
+  }
+
+  const validationError = validateLogoFile(file)
+  if (validationError) {
+    return { success: false, error: validationError }
+  }
+
+  const { supabase, organisationId } = auth
+  const inputBuffer = Buffer.from(await file.arrayBuffer())
+  const isSvg = file.type === 'image/svg+xml'
+
+  let uploadBuffer: Buffer
+  let contentType: string
+  let extension: string
+
+  if (isSvg) {
+    // Preserve vector quality — store SVG as-is without rasterizing.
+    uploadBuffer = inputBuffer
+    contentType = 'image/svg+xml'
+    extension = 'svg'
+  } else {
+    try {
+      uploadBuffer = await sharp(inputBuffer)
+        .resize({ width: 400, withoutEnlargement: true })
+        .png({ compressionLevel: 8 })
+        .toBuffer()
+    } catch (error) {
+      console.error('[uploadOrganisationLogo] sharp processing failed:', error)
+      return { success: false, error: 'Could not process that image. Try a different PNG or JPEG.' }
+    }
+    contentType = 'image/png'
+    extension = 'png'
+  }
+
+  const path = getOrganisationAssetPath(organisationId, 'logo', extension)
+
+  const { error: uploadError } = await supabase.storage
+    .from(ORGANISATION_ASSETS_BUCKET)
+    .upload(path, uploadBuffer, {
+      upsert: true,
+      contentType,
+      cacheControl: '3600',
+    })
+
+  if (uploadError) {
+    return { success: false, error: uploadError.message }
+  }
+
+  const publicUrl = getPublicAssetUrl(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    `${path}?v=${Date.now()}`
+  )
+
+  const { error: updateError } = await supabase
+    .from('organisations')
+    .update({ logo_url: publicUrl })
+    .eq('id', organisationId)
+
+  if (updateError) {
+    return { success: false, error: updateError.message }
+  }
+
+  revalidatePath('/dashboard/settings/organisation')
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/templates/new')
+  revalidatePath('/dashboard/templates')
+
+  return {
+    success: true,
+    url: publicUrl,
+    message: 'Logo uploaded successfully.',
+  }
 }
 
 export async function uploadOrganisationLetterhead(

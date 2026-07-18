@@ -29,6 +29,11 @@ export default async function DashboardLayout({
     redirect('/login')
   }
 
+  if (userProfile.is_active === false) {
+    await supabase.auth.signOut()
+    redirect('/login?error=deactivated')
+  }
+
   if (userProfile.must_change_password) {
     redirect('/change-password')
   }
@@ -45,6 +50,7 @@ export default async function DashboardLayout({
     department_id: userProfile.department_id,
     job_level: userProfile.job_level,
     must_change_password: userProfile.must_change_password,
+    is_active: userProfile.is_active !== false,
     created_at: userProfile.created_at,
     updated_at: userProfile.updated_at,
   }

@@ -151,9 +151,9 @@ export function OrgInfoForm({ organisation, plan }: OrgInfoFormProps) {
 
       <OrgBrandingUpload
         label="Organisation logo"
-        description="Optional. Shown centred at the top of templates and documents, above the main content."
+        description="Optional. Shown on templates and documents. PNG, JPEG, or SVG — max 2MB. Raster images are resized to 400px wide."
         currentUrl={organisation.logo_url}
-        accept="image/png,image/jpeg,image/webp,image/gif"
+        accept="image/png,image/jpeg,image/svg+xml"
         emptyHint="No logo uploaded — templates will omit the header logo."
         previewAlt="Organisation logo"
         previewClassName="max-h-24 max-w-full object-contain"

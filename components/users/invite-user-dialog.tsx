@@ -34,6 +34,8 @@ import {
   type JobLevel,
 } from '@/types/org-structure'
 import { OverseenDepartmentsField } from '@/components/users/overseen-departments-field'
+import { DepartmentCombobox } from '@/components/users/department-combobox'
+import { createDepartment } from '@/app/actions/departments'
 
 const inviteSchema = z.object({
   full_name: z.string().min(2, { message: 'Full name must be at least 2 characters' }),
@@ -62,7 +64,7 @@ interface InviteUserDialogProps {
 }
 
 export function InviteUserDialog({
-  departments,
+  departments: initialDepartments,
   hasManagingDirector,
   onSuccess,
 }: InviteUserDialogProps) {
@@ -72,6 +74,11 @@ export function InviteUserDialog({
   const [copiedField, setCopiedField] = useState<'email' | 'password' | 'all' | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
   const [overseenDepartmentIds, setOverseenDepartmentIds] = useState<string[]>([])
+  const [departments, setDepartments] = useState(initialDepartments)
+
+  useEffect(() => {
+    setDepartments(initialDepartments)
+  }, [initialDepartments])
 
   const defaultDepartmentId = useMemo(
     () => departments.find((d) => !d.is_executive)?.id ?? departments[0]?.id ?? '',
@@ -187,6 +194,34 @@ export function InviteUserDialog({
     }
   }
 
+  async function handleCreateDepartment(name: string) {
+    setServerError(null)
+    const result = await createDepartment(name)
+    if (result.error) {
+      setServerError(result.error)
+      return
+    }
+    if (!result.department) {
+      setServerError('Could not create department')
+      return
+    }
+
+    const created: DepartmentOption = {
+      id: result.department.id,
+      name: result.department.name,
+      slug: result.department.slug,
+      is_executive: result.department.is_executive,
+    }
+    setDepartments((prev) =>
+      [...prev, created].sort((a, b) => {
+        if (a.is_executive !== b.is_executive) return a.is_executive ? -1 : 1
+        return a.name.localeCompare(b.name)
+      })
+    )
+    setValue('department_id', created.id, { shouldValidate: true })
+    toast.success(`Department "${created.name}" created`)
+  }
+
   function handleOpenChange(isOpen: boolean) {
     if (!isOpen) {
       reset({
@@ -282,21 +317,14 @@ export function InviteUserDialog({
               <Label className="text-signara-navy font-medium">
                 Primary department <span className="text-destructive">*</span>
               </Label>
-              <Select
+              <DepartmentCombobox
+                departments={departments}
                 value={selectedDepartmentId}
-                onValueChange={(value) => setValue('department_id', value)}
-              >
-                <SelectTrigger className="w-full border-signara-steel focus:ring-signara-navy">
-                  <SelectValue placeholder="Select department" />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments.map((department) => (
-                    <SelectItem key={department.id} value={department.id}>
-                      {department.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(departmentId) =>
+                  setValue('department_id', departmentId, { shouldValidate: true })
+                }
+                onCreateName={handleCreateDepartment}
+              />
               {errors.department_id && (
                 <p className="text-destructive text-xs">{errors.department_id.message}</p>
               )}

@@ -7,6 +7,7 @@ import { EditMemberPlacementDialog } from '@/components/users/edit-member-placem
 import { RemoveMemberDialog } from '@/components/users/remove-member-dialog'
 import { ActivateMemberDialog } from '@/components/users/activate-member-dialog'
 import { ResetPasswordDialog } from '@/components/users/reset-password-dialog'
+import { MemberActionsMenu } from '@/components/users/member-actions-menu'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -80,6 +81,10 @@ function jobLevelLabel(level: JobLevel | string | undefined): string {
     return JOB_LEVEL_LABELS[level as JobLevel]
   }
   return 'Staff'
+}
+
+function isMemberActive(member: UserWithDepartment): boolean {
+  return member.is_active !== false
 }
 
 export function TeamClient({
@@ -241,7 +246,14 @@ export function TeamClient({
                   </td>
 
                   <td className="px-6 py-4">
-                    {member.must_change_password ? (
+                    {!isMemberActive(member) ? (
+                      <Badge
+                        className="bg-red-50 text-red-700 border-red-200 hover:bg-red-50"
+                        variant="outline"
+                      >
+                        Deactivated
+                      </Badge>
+                    ) : member.must_change_password ? (
                       <Badge
                         className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50"
                         variant="outline"
@@ -280,6 +292,11 @@ export function TeamClient({
                         onSuccess={() => router.refresh()}
                       />
                       <RemoveMemberDialog
+                        member={member}
+                        currentUserId={currentUserId}
+                        onSuccess={() => router.refresh()}
+                      />
+                      <MemberActionsMenu
                         member={member}
                         currentUserId={currentUserId}
                         onSuccess={() => router.refresh()}

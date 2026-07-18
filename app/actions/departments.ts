@@ -64,6 +64,7 @@ export async function createDepartment(name: string) {
   }
 
   revalidatePath('/dashboard/team')
+  revalidatePath('/dashboard/settings/departments')
   return { department: data }
 }
 
@@ -105,6 +106,7 @@ export async function deleteDepartment(id: string) {
   }
 
   revalidatePath('/dashboard/team')
+  revalidatePath('/dashboard/settings/departments')
   return { success: true }
 }
 

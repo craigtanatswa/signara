@@ -58,6 +58,8 @@ export interface User {
   department_id: string | null
   job_level: JobLevel
   must_change_password: boolean
+  /** False when an admin has deactivated the account — blocks login. */
+  is_active: boolean
   created_at: string
   updated_at: string
 }
@@ -152,6 +154,11 @@ export interface Template {
   scope: TemplateScope
   /** Access restriction when scope is `department`; null for organisation-wide access. */
   department_id: string | null
+  /**
+   * Department names allowed to use this template. Null = everyone in the organisation.
+   * Preferred over single `department_id` when multiple departments should have access.
+   */
+  allowed_departments?: string[] | null
   /**
    * Department whose archive completed documents from this template are filed under.
    * Null means organisation-wide (visible to anyone with archive access).

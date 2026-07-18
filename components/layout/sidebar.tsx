@@ -70,7 +70,7 @@ export function Sidebar({ user, organisation }: SidebarProps) {
 
   return (
     <aside className="flex h-full min-h-0 w-60 flex-col bg-signara-navy">
-      {/* Logo — cropped asset, 4/5 of section width */}
+      {/* Logo — Signara branding (org logo in sidebar disabled for now) */}
       <div className="flex h-16 shrink-0 items-center justify-center border-b border-r border-border bg-signara-offwhite">
         <Image
           src="/assets/logo-signara-sidebar.png"
@@ -80,6 +80,22 @@ export function Sidebar({ user, organisation }: SidebarProps) {
           priority
           className="h-4/5 w-4/5 object-contain"
         />
+        {/* {organisation.logo_url ? (
+          <img
+            src={organisation.logo_url}
+            alt={organisation.name}
+            className="h-4/5 max-h-12 w-4/5 object-contain"
+          />
+        ) : (
+          <Image
+            src="/assets/logo-signara-sidebar.png"
+            alt="Signara"
+            width={368}
+            height={160}
+            priority
+            className="h-4/5 w-4/5 object-contain"
+          />
+        )} */}
       </div>
 
       {/* Org name */}

@@ -36,6 +36,7 @@ export async function GET() {
       )
       .eq('organisation_id', currentUser.organisation_id)
       .eq('must_change_password', false)
+      .eq('is_active', true)
       .order('full_name'),
     loadOverseenDepartmentIdsByUser(supabase, currentUser.organisation_id),
   ])

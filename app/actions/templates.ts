@@ -39,6 +39,63 @@ function validateTemplateScope(scope: TemplateScope, departmentId: string | null
   return null
 }
 
+function normalizeAllowedDepartments(
+  allowedDepartments: string[] | null | undefined
+): string[] | null {
+  if (!allowedDepartments || allowedDepartments.length === 0) {
+    return null
+  }
+  const unique = [
+    ...new Map(
+      allowedDepartments
+        .map((name) => name.trim())
+        .filter(Boolean)
+        .map((name) => [name.toLowerCase(), name] as const)
+    ).values(),
+  ]
+  return unique.length > 0 ? unique : null
+}
+
+async function resolveAllowedDepartments(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organisationId: string,
+  allowedDepartments: string[] | null
+): Promise<{ names: string[] | null; primaryDepartmentId: string | null; error?: string }> {
+  const names = normalizeAllowedDepartments(allowedDepartments)
+  if (!names) {
+    return { names: null, primaryDepartmentId: null }
+  }
+
+  const { data: departments } = await supabase
+    .from('departments')
+    .select('id, name')
+    .eq('organisation_id', organisationId)
+
+  const byLowerName = new Map(
+    (departments ?? []).map((d) => [d.name.toLowerCase(), d] as const)
+  )
+
+  const resolved: string[] = []
+  let primaryDepartmentId: string | null = null
+
+  for (const name of names) {
+    const match = byLowerName.get(name.toLowerCase())
+    if (!match) {
+      return {
+        names: null,
+        primaryDepartmentId: null,
+        error: `Department "${name}" was not found in your organisation.`,
+      }
+    }
+    resolved.push(match.name)
+    if (!primaryDepartmentId) {
+      primaryDepartmentId = match.id
+    }
+  }
+
+  return { names: resolved, primaryDepartmentId }
+}
+
 async function resolveOrgDepartmentId(
   supabase: Awaited<ReturnType<typeof createClient>>,
   organisationId: string,
@@ -71,6 +128,7 @@ export async function createTemplate(data: {
   is_active: boolean
   scope?: TemplateScope
   department_id?: string | null
+  allowed_departments?: string[] | null
   archive_department_id?: string | null
 }) {
   const { supabase, profile } = await getAuthenticatedAdmin()
@@ -79,17 +137,40 @@ export async function createTemplate(data: {
     return { error: nameError }
   }
 
-  const scope: TemplateScope = data.scope ?? 'organisation'
-  const departmentId = scope === 'department' ? (data.department_id ?? null) : null
-  const scopeError = validateTemplateScope(scope, departmentId)
-  if (scopeError) {
-    return { error: scopeError }
+  const allowed = await resolveAllowedDepartments(
+    supabase,
+    profile.organisation_id,
+    data.allowed_departments ?? null
+  )
+  if (allowed.error) {
+    return { error: allowed.error }
   }
 
-  if (departmentId) {
-    const accessDept = await resolveOrgDepartmentId(supabase, profile.organisation_id, departmentId)
-    if (accessDept.error) {
-      return { error: accessDept.error }
+  // Prefer multi-department list when provided; keep scope/department_id in sync for legacy.
+  const scope: TemplateScope = allowed.names
+    ? 'department'
+    : (data.scope ?? 'organisation')
+  const departmentId = allowed.names
+    ? allowed.primaryDepartmentId
+    : scope === 'department'
+      ? (data.department_id ?? null)
+      : null
+
+  if (!allowed.names) {
+    const scopeError = validateTemplateScope(scope, departmentId)
+    if (scopeError) {
+      return { error: scopeError }
+    }
+
+    if (departmentId) {
+      const accessDept = await resolveOrgDepartmentId(
+        supabase,
+        profile.organisation_id,
+        departmentId
+      )
+      if (accessDept.error) {
+        return { error: accessDept.error }
+      }
     }
   }
 
@@ -112,6 +193,7 @@ export async function createTemplate(data: {
       workflow: { steps: [] } satisfies Workflow,
       scope,
       department_id: departmentId,
+      allowed_departments: allowed.names,
       archive_department_id: archiveDept.departmentId,
       created_by: profile.id,
       version: 1,
@@ -140,6 +222,7 @@ export async function updateTemplate(
     is_active: boolean
     scope?: TemplateScope
     department_id?: string | null
+    allowed_departments?: string[] | null
     archive_department_id?: string | null
   }
 ) {
@@ -149,17 +232,39 @@ export async function updateTemplate(
     return { error: nameError }
   }
 
-  const scope: TemplateScope = data.scope ?? 'organisation'
-  const departmentId = scope === 'department' ? (data.department_id ?? null) : null
-  const scopeError = validateTemplateScope(scope, departmentId)
-  if (scopeError) {
-    return { error: scopeError }
+  const allowed = await resolveAllowedDepartments(
+    supabase,
+    profile.organisation_id,
+    data.allowed_departments ?? null
+  )
+  if (allowed.error) {
+    return { error: allowed.error }
   }
 
-  if (departmentId) {
-    const accessDept = await resolveOrgDepartmentId(supabase, profile.organisation_id, departmentId)
-    if (accessDept.error) {
-      return { error: accessDept.error }
+  const scope: TemplateScope = allowed.names
+    ? 'department'
+    : (data.scope ?? 'organisation')
+  const departmentId = allowed.names
+    ? allowed.primaryDepartmentId
+    : scope === 'department'
+      ? (data.department_id ?? null)
+      : null
+
+  if (!allowed.names) {
+    const scopeError = validateTemplateScope(scope, departmentId)
+    if (scopeError) {
+      return { error: scopeError }
+    }
+
+    if (departmentId) {
+      const accessDept = await resolveOrgDepartmentId(
+        supabase,
+        profile.organisation_id,
+        departmentId
+      )
+      if (accessDept.error) {
+        return { error: accessDept.error }
+      }
     }
   }
 
@@ -193,6 +298,7 @@ export async function updateTemplate(
       is_active: data.is_active,
       scope,
       department_id: departmentId,
+      allowed_departments: allowed.names,
       archive_department_id: archiveDept.departmentId,
       version: (existing.version ?? 1) + 1,
       updated_at: new Date().toISOString(),

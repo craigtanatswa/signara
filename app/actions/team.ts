@@ -13,6 +13,7 @@ import { resend } from '@/lib/email/resend'
 import { getResendFromAddress } from '@/lib/email/config'
 import { getAppBaseUrl } from '@/lib/email/send'
 import { buildPasswordResetEmail } from '@/lib/email/templates/password-reset'
+import { buildInvitationEmail } from '@/lib/email/templates/invitation'
 import { isTestUserEmail } from '@/lib/users/test-user'
 import { JOB_LEVELS, type JobLevel } from '@/types/org-structure'
 
@@ -369,6 +370,266 @@ export async function resetMemberPassword(userId: string): Promise<ResetMemberPa
       error:
         emailError.message ??
         'Password was updated but the email could not be sent. Check Resend domain verification.',
+    }
+  }
+
+  revalidatePath('/dashboard/team')
+
+  return {
+    success: true,
+    delivery: 'email',
+    email: targetUser.email,
+    memberName: targetUser.full_name,
+  }
+}
+
+export async function setMemberActive(userId: string, isActive: boolean) {
+  const parsed = userIdSchema.safeParse(userId)
+  if (!parsed.success) {
+    return { error: 'Invalid team member' }
+  }
+
+  const { supabase, profile } = await getAuthenticatedAdmin()
+  const targetId = parsed.data
+
+  if (targetId === profile.id) {
+    return { error: 'You cannot deactivate your own account.' }
+  }
+
+  const { data: targetUser, error: targetError } = await supabase
+    .from('users')
+    .select('id, full_name, is_active')
+    .eq('id', targetId)
+    .eq('organisation_id', profile.organisation_id)
+    .maybeSingle()
+
+  if (targetError || !targetUser) {
+    return { error: 'Team member not found' }
+  }
+
+  if (targetUser.is_active === isActive) {
+    return {
+      error: isActive
+        ? 'This account is already active'
+        : 'This account is already deactivated',
+    }
+  }
+
+  const { error: updateError } = await supabase
+    .from('users')
+    .update({
+      is_active: isActive,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', targetId)
+    .eq('organisation_id', profile.organisation_id)
+
+  if (updateError) {
+    return { error: updateError.message }
+  }
+
+  revalidatePath('/dashboard/team')
+
+  return {
+    success: true,
+    memberName: targetUser.full_name,
+    isActive,
+  }
+}
+
+export async function changeMemberRole(userId: string, role: 'admin' | 'member') {
+  const parsed = userIdSchema.safeParse(userId)
+  if (!parsed.success) {
+    return { error: 'Invalid team member' }
+  }
+
+  if (role !== 'admin' && role !== 'member') {
+    return { error: 'Invalid role' }
+  }
+
+  const { supabase, profile } = await getAuthenticatedAdmin()
+  const targetId = parsed.data
+
+  const { data: targetUser, error: targetError } = await supabase
+    .from('users')
+    .select('id, full_name, role')
+    .eq('id', targetId)
+    .eq('organisation_id', profile.organisation_id)
+    .maybeSingle()
+
+  if (targetError || !targetUser) {
+    return { error: 'Team member not found' }
+  }
+
+  if (targetUser.role === role) {
+    return { error: `This member is already a${role === 'admin' ? 'n admin' : ' member'}.` }
+  }
+
+  if (targetId === profile.id && role === 'member') {
+    const { count: adminCount } = await supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('organisation_id', profile.organisation_id)
+      .eq('role', 'admin')
+      .eq('is_active', true)
+
+    if ((adminCount ?? 0) <= 1) {
+      return {
+        error:
+          'Cannot demote yourself — you are the only admin. Promote another member first.',
+      }
+    }
+  }
+
+  if (targetUser.role === 'admin' && role === 'member') {
+    const { count: adminCount } = await supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('organisation_id', profile.organisation_id)
+      .eq('role', 'admin')
+      .eq('is_active', true)
+
+    if ((adminCount ?? 0) <= 1) {
+      return { error: 'Cannot demote the last admin. Promote another member first.' }
+    }
+  }
+
+  const { error: updateError } = await supabase
+    .from('users')
+    .update({
+      role,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', targetId)
+    .eq('organisation_id', profile.organisation_id)
+
+  if (updateError) {
+    return { error: updateError.message }
+  }
+
+  revalidatePath('/dashboard/team')
+
+  return {
+    success: true,
+    memberName: targetUser.full_name,
+    role,
+  }
+}
+
+export type ResendInvitationResult =
+  | { success: true; delivery: 'manual'; email: string; tempPassword: string; memberName: string }
+  | { success: true; delivery: 'email'; email: string; memberName: string }
+  | { error: string }
+
+export async function resendInvitation(userId: string): Promise<ResendInvitationResult> {
+  const parsed = userIdSchema.safeParse(userId)
+  if (!parsed.success) {
+    return { error: 'Invalid team member' }
+  }
+
+  const { supabase, profile } = await getAuthenticatedAdmin()
+  const targetId = parsed.data
+
+  const [{ data: targetUser, error: targetError }, { data: adminProfile }] = await Promise.all([
+    supabase
+      .from('users')
+      .select('id, full_name, email, must_change_password, is_active')
+      .eq('id', targetId)
+      .eq('organisation_id', profile.organisation_id)
+      .maybeSingle(),
+    supabase
+      .from('users')
+      .select('full_name, organisations(name)')
+      .eq('id', profile.id)
+      .single(),
+  ])
+
+  if (targetError || !targetUser) {
+    return { error: 'Team member not found' }
+  }
+
+  if (!targetUser.must_change_password) {
+    return {
+      error:
+        'This member has already completed setup. Use Reset password instead.',
+    }
+  }
+
+  if (targetUser.is_active === false) {
+    return { error: 'Reactivate this account before resending an invitation.' }
+  }
+
+  const tempPassword = generateTempPassword()
+  const adminSupabase = await createAdminClient()
+
+  const { error: authError } = await adminSupabase.auth.admin.updateUserById(targetId, {
+    password: tempPassword,
+  })
+
+  if (authError) {
+    return { error: authError.message }
+  }
+
+  const { error: updateError } = await adminSupabase
+    .from('users')
+    .update({
+      must_change_password: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', targetId)
+    .eq('organisation_id', profile.organisation_id)
+
+  if (updateError) {
+    return { error: updateError.message }
+  }
+
+  if (isTestUserEmail(targetUser.email)) {
+    revalidatePath('/dashboard/team')
+    return {
+      success: true,
+      delivery: 'manual',
+      email: targetUser.email,
+      tempPassword,
+      memberName: targetUser.full_name,
+    }
+  }
+
+  if (!process.env.RESEND_API_KEY) {
+    return {
+      error:
+        'Email is not configured. Set RESEND_API_KEY to send invitation emails to real users.',
+    }
+  }
+
+  const rawOrg = adminProfile?.organisations
+  const orgRecord = Array.isArray(rawOrg) ? rawOrg[0] : rawOrg
+  const orgName =
+    orgRecord && typeof orgRecord === 'object' && 'name' in orgRecord
+      ? String(orgRecord.name)
+      : 'your organisation'
+  const loginUrl = `${getAppBaseUrl()}/login`
+  const { subject, html } = buildInvitationEmail({
+    recipientName: targetUser.full_name.split(' ')[0] ?? targetUser.full_name,
+    orgName,
+    email: targetUser.email,
+    tempPassword,
+    loginUrl,
+    inviterName: adminProfile?.full_name,
+  })
+
+  const { error: emailError } = await resend.emails.send({
+    from: getResendFromAddress(),
+    to: targetUser.email,
+    subject,
+    html,
+  })
+
+  if (emailError) {
+    console.error('[resendInvitation] Resend error:', emailError)
+    return {
+      error:
+        emailError.message ??
+        'Password was updated but the invitation email could not be sent.',
     }
   }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
@@ -20,9 +20,20 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>
 
+const DEACTIVATED_MESSAGE =
+  'Your account has been deactivated. Contact your administrator.'
+
 export default function LoginPage() {
   const router = useRouter()
   const [serverError, setServerError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('error') === 'deactivated') {
+      setServerError(DEACTIVATED_MESSAGE)
+    }
+  }, [])
 
   const {
     register,
@@ -46,7 +57,6 @@ export default function LoginPage() {
       return
     }
 
-    // Check must_change_password
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -54,9 +64,15 @@ export default function LoginPage() {
     if (user) {
       const { data: profile } = await supabase
         .from('users')
-        .select('must_change_password')
+        .select('must_change_password, is_active')
         .eq('id', user.id)
         .single()
+
+      if (profile?.is_active === false) {
+        await supabase.auth.signOut()
+        setServerError(DEACTIVATED_MESSAGE)
+        return
+      }
 
       if (profile?.must_change_password) {
         router.push('/change-password')

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
 import { Badge } from '@/components/ui/badge'
-import { User, Building2, CreditCard, ChevronRight } from 'lucide-react'
+import { User, Building2, CreditCard, ChevronRight, Network } from 'lucide-react'
 import type { User as UserType } from '@/types/database'
 
 export default async function SettingsPage() {
@@ -40,6 +40,14 @@ export default async function SettingsPage() {
       icon: Building2,
       title: 'Organisation',
       description: 'Manage your organisation name, branding, document retention, and plan.',
+      adminOnly: true,
+      placeholder: false,
+    },
+    {
+      href: '/dashboard/settings/departments',
+      icon: Network,
+      title: 'Departments',
+      description: 'Create and manage departments used for templates, invites, and approvals.',
       adminOnly: true,
       placeholder: false,
     },

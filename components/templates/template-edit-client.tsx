@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { Loader2, ArrowRight, FileText } from 'lucide-react'
+import { Loader2, ArrowRight, FileText, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Select,
   SelectContent,
@@ -53,6 +55,7 @@ interface TemplateSnapshotInput {
   content: TiptapDocument | null
   scope: TemplateScope
   departmentId: string | null
+  allowedDepartments: string[] | null
   archiveDepartmentId: string | null
 }
 
@@ -63,6 +66,7 @@ function buildSnapshot({
   content,
   scope,
   departmentId,
+  allowedDepartments,
   archiveDepartmentId,
 }: TemplateSnapshotInput): string {
   return JSON.stringify({
@@ -72,8 +76,22 @@ function buildSnapshot({
     content: JSON.stringify(normalizeTemplateContent(content)),
     scope,
     departmentId,
+    allowedDepartments: allowedDepartments?.slice().sort() ?? null,
     archiveDepartmentId,
   })
+}
+
+function initialAllowedDepartments(template?: Template | null): string[] {
+  if (template?.allowed_departments?.length) {
+    return [...template.allowed_departments]
+  }
+  return []
+}
+
+function initialPermissionMode(template?: Template | null): 'everyone' | 'departments' {
+  if (template?.allowed_departments?.length) return 'departments'
+  if (template?.scope === 'department') return 'departments'
+  return 'everyone'
 }
 
 const ARCHIVE_ORG_VALUE = '__organisation__'
@@ -92,10 +110,27 @@ export function TemplateEditClient({
   const [isActive, setIsActive] = useState(template?.is_active ?? false)
   const [scope, setScope] = useState<TemplateScope>(template?.scope ?? 'organisation')
   const [departmentId, setDepartmentId] = useState<string>(template?.department_id ?? '')
+  const [permissionMode, setPermissionMode] = useState<'everyone' | 'departments'>(() =>
+    initialPermissionMode(template)
+  )
+  const [allowedDepartments, setAllowedDepartments] = useState<string[]>(() =>
+    initialAllowedDepartments(template)
+  )
+  const [permissionsOpen, setPermissionsOpen] = useState(false)
   const [archiveDepartmentId, setArchiveDepartmentId] = useState<string>(
     template?.archive_department_id ?? ''
   )
   const { departments, loading: departmentsLoading } = useDepartments()
+
+  // Migrate legacy single-department scope into multi-select names once departments load.
+  useEffect(() => {
+    if (permissionMode !== 'departments') return
+    if (allowedDepartments.length > 0) return
+    if (!departmentId || departments.length === 0) return
+    const match = departments.find((d) => d.id === departmentId)
+    if (match) setAllowedDepartments([match.name])
+  }, [permissionMode, allowedDepartments.length, departmentId, departments])
+
   const [useOrganisationLogo, setUseOrganisationLogo] = useState(() =>
     getTemplateUsesOrganisationLogo(template?.content ?? null)
   )
@@ -130,6 +165,9 @@ export function TemplateEditClient({
         : null,
       scope: template?.scope ?? 'organisation',
       departmentId: template?.department_id ?? null,
+      allowedDepartments: template?.allowed_departments?.length
+        ? [...template.allowed_departments]
+        : null,
       archiveDepartmentId: template?.archive_department_id ?? null,
     })
   )
@@ -253,13 +291,30 @@ export function TemplateEditClient({
         content,
         scope,
         departmentId: departmentId || null,
+        allowedDepartments:
+          permissionMode === 'departments' && allowedDepartments.length > 0
+            ? allowedDepartments
+            : null,
         archiveDepartmentId: archiveDepartmentId || null,
       }),
-    [name, description, isActive, content, scope, departmentId, archiveDepartmentId]
+    [
+      name,
+      description,
+      isActive,
+      content,
+      scope,
+      departmentId,
+      permissionMode,
+      allowedDepartments,
+      archiveDepartmentId,
+    ]
   )
   const isDirty = isContentDirty || currentSnapshot !== baselineSnapshot
   const hasTitle = name.trim().length > 0
-  const hasValidScope = scope === 'organisation' || Boolean(departmentId)
+  const hasValidScope =
+    permissionMode === 'everyone' ||
+    allowedDepartments.length > 0 ||
+    (scope === 'department' && Boolean(departmentId))
 
   const persistTemplate = useCallback(
     async (options: {
@@ -274,8 +329,8 @@ export function TemplateEditClient({
         return false
       }
 
-      if (scope === 'department' && !departmentId) {
-        toast.error('Select a department for this template, or switch it to organisation-wide.')
+      if (permissionMode === 'departments' && allowedDepartments.length === 0) {
+        toast.error('Select at least one department, or allow everyone in the organisation.')
         return false
       }
 
@@ -294,13 +349,23 @@ export function TemplateEditClient({
         }
       }
 
+      const resolvedAllowed =
+        permissionMode === 'departments' && allowedDepartments.length > 0
+          ? allowedDepartments
+          : null
+      const resolvedScope: TemplateScope = resolvedAllowed ? 'department' : 'organisation'
+      const firstDept = resolvedAllowed
+        ? departments.find((d) => resolvedAllowed.includes(d.name))
+        : null
+
       const payload = {
         name: trimmedName,
         description: description.trim() || null,
         content: normalizedContent,
         is_active: options.asDraft ? false : isActive,
-        scope,
-        department_id: scope === 'department' ? departmentId : null,
+        scope: resolvedScope,
+        department_id: firstDept?.id ?? null,
+        allowed_departments: resolvedAllowed,
         archive_department_id: archiveDepartmentId || null,
       }
 
@@ -314,6 +379,10 @@ export function TemplateEditClient({
         }
 
         setSavedId(result.id!)
+        setScope(payload.scope)
+        setDepartmentId(payload.department_id ?? '')
+        setAllowedDepartments(payload.allowed_departments ?? [])
+        setPermissionMode(payload.allowed_departments?.length ? 'departments' : 'everyone')
         setBaselineSnapshot(
           buildSnapshot({
             name: payload.name,
@@ -322,6 +391,7 @@ export function TemplateEditClient({
             content: normalizedContent,
             scope: payload.scope,
             departmentId: payload.department_id,
+            allowedDepartments: payload.allowed_departments,
             archiveDepartmentId: payload.archive_department_id,
           })
         )
@@ -346,6 +416,10 @@ export function TemplateEditClient({
         return false
       }
 
+      setScope(payload.scope)
+      setDepartmentId(payload.department_id ?? '')
+      setAllowedDepartments(payload.allowed_departments ?? [])
+      setPermissionMode(payload.allowed_departments?.length ? 'departments' : 'everyone')
       setBaselineSnapshot(
         buildSnapshot({
           name: payload.name,
@@ -354,6 +428,7 @@ export function TemplateEditClient({
           content: normalizedContent,
           scope: payload.scope,
           departmentId: payload.department_id,
+          allowedDepartments: payload.allowed_departments,
           archiveDepartmentId: payload.archive_department_id,
         })
       )
@@ -375,8 +450,9 @@ export function TemplateEditClient({
       router,
       savedId,
       template,
-      scope,
-      departmentId,
+      permissionMode,
+      allowedDepartments,
+      departments,
       archiveDepartmentId,
     ]
   )
@@ -474,34 +550,124 @@ export function TemplateEditClient({
                 rows={1}
                 className="h-[2.75rem] min-h-[2.75rem] resize-none overflow-y-auto border-signara-steel/30 bg-white px-3 py-2 text-base text-signara-navy shadow-none placeholder:text-signara-steel focus-visible:border-signara-navy focus-visible:ring-2 focus-visible:ring-signara-navy/20"
               />
-              <div className="flex flex-wrap items-center gap-2">
-                <Label htmlFor="template-scope" className="shrink-0 text-sm font-medium text-signara-navy">
-                  Who can use this
-                </Label>
-                <Select
-                  value={scope}
-                  onValueChange={(value) => {
-                    setScope(value as TemplateScope)
-                    if (value === 'organisation') setDepartmentId('')
-                  }}
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setPermissionsOpen((open) => !open)}
+                  className="flex w-full items-center justify-between rounded-md border border-signara-steel/30 bg-white px-3 py-2 text-left text-sm font-medium text-signara-navy hover:bg-signara-background/60"
                 >
-                  <SelectTrigger
-                    id="template-scope"
-                    className="h-9 min-w-[10rem] flex-1 border-signara-steel/30 bg-white text-signara-navy"
+                  <span>
+                    Permissions
+                    <span className="ml-2 font-normal text-signara-steel">
+                      {permissionMode === 'everyone'
+                        ? 'Everyone in the organisation'
+                        : `${allowedDepartments.length || 'No'} department${allowedDepartments.length === 1 ? '' : 's'}`}
+                    </span>
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      'size-4 text-signara-steel transition-transform',
+                      permissionsOpen && 'rotate-180'
+                    )}
+                  />
+                </button>
+                {permissionsOpen && (
+                  <div className="space-y-3 rounded-md border border-signara-steel/25 bg-signara-background/40 p-3">
+                    <p className="text-sm font-medium text-signara-navy">Who can use this template?</p>
+                    <RadioGroup
+                      value={permissionMode}
+                      onValueChange={(value) => {
+                        const mode = value as 'everyone' | 'departments'
+                        setPermissionMode(mode)
+                        if (mode === 'everyone') {
+                          setScope('organisation')
+                          setDepartmentId('')
+                          setAllowedDepartments([])
+                        } else {
+                          setScope('department')
+                          // Seed from legacy single department if present
+                          if (allowedDepartments.length === 0 && departmentId) {
+                            const match = departments.find((d) => d.id === departmentId)
+                            if (match) setAllowedDepartments([match.name])
+                          }
+                        }
+                      }}
+                      className="gap-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="everyone" id="perm-everyone" />
+                        <Label htmlFor="perm-everyone" className="font-normal text-signara-navy">
+                          Everyone in the organisation
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="departments" id="perm-departments" />
+                        <Label htmlFor="perm-departments" className="font-normal text-signara-navy">
+                          Specific departments
+                        </Label>
+                      </div>
+                    </RadioGroup>
+
+                    {permissionMode === 'departments' && (
+                      <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border border-signara-steel/20 bg-white p-2">
+                        {departmentsLoading ? (
+                          <p className="px-1 text-xs text-signara-steel">Loading departments…</p>
+                        ) : departments.length === 0 ? (
+                          <p className="px-1 text-xs text-signara-steel">
+                            No departments yet. Add them under Settings → Departments.
+                          </p>
+                        ) : (
+                          departments.map((department) => {
+                            const checked = allowedDepartments.includes(department.name)
+                            return (
+                              <label
+                                key={department.id}
+                                className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-signara-background"
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(value) => {
+                                    setAllowedDepartments((prev) => {
+                                      if (value) {
+                                        return prev.includes(department.name)
+                                          ? prev
+                                          : [...prev, department.name]
+                                      }
+                                      return prev.filter((name) => name !== department.name)
+                                    })
+                                  }}
+                                />
+                                <span className="text-sm text-signara-navy">{department.name}</span>
+                              </label>
+                            )
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Label
+                    htmlFor="template-archive-department"
+                    className="shrink-0 text-sm font-medium text-signara-navy"
                   >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="organisation">Whole organisation</SelectItem>
-                    <SelectItem value="department">Specific department</SelectItem>
-                  </SelectContent>
-                </Select>
-                {scope === 'department' && (
-                  <Select value={departmentId} onValueChange={setDepartmentId}>
-                    <SelectTrigger className="h-9 min-w-[10rem] flex-1 border-signara-steel/30 bg-white text-signara-navy">
-                      <SelectValue placeholder={departmentsLoading ? 'Loading…' : 'Select department'} />
+                    Archive under
+                  </Label>
+                  <Select
+                    value={archiveDepartmentId || ARCHIVE_ORG_VALUE}
+                    onValueChange={(value) =>
+                      setArchiveDepartmentId(value === ARCHIVE_ORG_VALUE ? '' : value)
+                    }
+                  >
+                    <SelectTrigger
+                      id="template-archive-department"
+                      className="h-9 min-w-[10rem] flex-1 border-signara-steel/30 bg-white text-signara-navy"
+                    >
+                      <SelectValue placeholder={departmentsLoading ? 'Loading…' : 'Select archive'} />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value={ARCHIVE_ORG_VALUE}>Organisation-wide</SelectItem>
                       {departments.map((department) => (
                         <SelectItem key={department.id} value={department.id}>
                           {department.name}
@@ -509,34 +675,7 @@ export function TemplateEditClient({
                       ))}
                     </SelectContent>
                   </Select>
-                )}
-                <Label
-                  htmlFor="template-archive-department"
-                  className="shrink-0 text-sm font-medium text-signara-navy sm:ml-2"
-                >
-                  Archive under
-                </Label>
-                <Select
-                  value={archiveDepartmentId || ARCHIVE_ORG_VALUE}
-                  onValueChange={(value) =>
-                    setArchiveDepartmentId(value === ARCHIVE_ORG_VALUE ? '' : value)
-                  }
-                >
-                  <SelectTrigger
-                    id="template-archive-department"
-                    className="h-9 min-w-[10rem] flex-1 border-signara-steel/30 bg-white text-signara-navy"
-                  >
-                    <SelectValue placeholder={departmentsLoading ? 'Loading…' : 'Select archive'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ARCHIVE_ORG_VALUE}>Organisation-wide</SelectItem>
-                    {departments.map((department) => (
-                      <SelectItem key={department.id} value={department.id}>
-                        {department.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                </div>
               </div>
             </div>
 

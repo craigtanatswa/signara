@@ -36,6 +36,7 @@ export default async function OrganisationSettingsPage() {
     department_id: userProfile.department_id,
     job_level: userProfile.job_level,
     must_change_password: userProfile.must_change_password,
+    is_active: userProfile.is_active !== false,
     created_at: userProfile.created_at,
     updated_at: userProfile.updated_at,
   }
