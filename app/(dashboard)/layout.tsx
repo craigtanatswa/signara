@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/sidebar'
+import { PlanUpgradeRequiredGate } from '@/components/billing/plan-upgrade-required-gate'
+import { getPlanUpgradeLock } from '@/lib/billing/plan-upgrade-lock'
 import { DEFAULT_BRAND_THEME, isBrandTheme } from '@/lib/brand-themes'
 import type { User, Organisation } from '@/types/database'
 
@@ -37,6 +39,8 @@ export default async function DashboardLayout({
   if (userProfile.must_change_password) {
     redirect('/change-password')
   }
+
+  const orgForTrial = userProfile.organisations as Organisation | null
 
   const user: User = {
     id: userProfile.id,
@@ -81,15 +85,33 @@ export default async function DashboardLayout({
     ? organisation.brand_theme
     : DEFAULT_BRAND_THEME
 
+  const upgradeLock = orgForTrial
+    ? await getPlanUpgradeLock({
+        id: orgForTrial.id,
+        plan_id: orgForTrial.plan_id,
+        subscription_status: orgForTrial.subscription_status,
+        trial_ends_at: orgForTrial.trial_ends_at,
+        minimum_plan_id: orgForTrial.minimum_plan_id ?? null,
+      })
+    : null
+
   return (
     <div
       data-brand-theme={brandTheme}
       className="flex min-h-0 flex-1 overflow-hidden bg-signara-background"
     >
-      <Sidebar user={user} organisation={organisation} />
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
-      </div>
+      <PlanUpgradeRequiredGate lock={upgradeLock} isAdmin={user.role === 'admin'}>
+        <Sidebar
+          user={user}
+          organisation={organisation}
+          settingsHref={
+            upgradeLock ? '/dashboard/settings/billing' : '/dashboard/settings'
+          }
+        />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
+        </div>
+      </PlanUpgradeRequiredGate>
     </div>
   )
 }

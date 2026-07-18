@@ -8,6 +8,7 @@ import { Loader2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { updateMemberPlacement } from '@/app/actions/team'
 import { ErrorMessage } from '@/components/ui/error-message'
+import { ActionIconTooltip } from '@/components/ui/action-icon-tooltip'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -155,16 +156,18 @@ export function EditMemberPlacementDialog({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="text-signara-steel hover:text-signara-navy"
-        onClick={() => handleOpenChange(true)}
-        aria-label={`Edit ${member.full_name}'s position, department and job level`}
-      >
-        <Pencil className="size-4" />
-      </Button>
+      <ActionIconTooltip label="Edit member">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="text-signara-steel hover:text-signara-navy"
+          onClick={() => handleOpenChange(true)}
+          aria-label={`Edit ${member.full_name}'s position, department and job level`}
+        >
+          <Pencil className="size-4" />
+        </Button>
+      </ActionIconTooltip>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[480px]">

@@ -4,9 +4,16 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/header'
 import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
+import { PlanUsageBanner } from '@/components/billing/plan-usage-banner'
+import {
+  OnboardingChecklist,
+  type OnboardingItem,
+} from '@/components/onboarding/onboarding-checklist'
 import { FileText, Clock, CheckCircle2 } from 'lucide-react'
 import { loadAwaitingApprovalsForUser } from '@/lib/documents/load-for-viewer'
+import { checkPlanLimits } from '@/lib/billing/limits'
 import type { User } from '@/types/database'
+import type { Workflow } from '@/types/workflow'
 
 function getGreeting() {
   const hour = new Date().getHours()
@@ -44,8 +51,18 @@ export default async function DashboardPage() {
 
   // Use admin client for assignee-visible data — member RLS often hides
   // documents the user did not initiate.
-  const [awaitingRows, sentResult, completedResult, initiatedDocsResult, stepDocIdsResult] =
-    await Promise.all([
+  const [
+    awaitingRows,
+    sentResult,
+    completedResult,
+    initiatedDocsResult,
+    stepDocIdsResult,
+    planLimits,
+    lifetimeDocsResult,
+    usersCountResult,
+    templatesResult,
+    orgResult,
+  ] = await Promise.all([
       loadAwaitingApprovalsForUser({
         userId: authUser.id,
         organisationId: user.organisation_id,
@@ -72,6 +89,25 @@ export default async function DashboardPage() {
         .from('document_steps')
         .select('document_id')
         .eq('assignee_user_id', authUser.id),
+      checkPlanLimits(user.organisation_id).catch(() => null),
+      admin
+        .from('documents')
+        .select('id', { count: 'exact', head: true })
+        .eq('organisation_id', user.organisation_id),
+      admin
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('organisation_id', user.organisation_id)
+        .eq('is_active', true),
+      admin
+        .from('templates')
+        .select('id, workflow')
+        .eq('organisation_id', user.organisation_id),
+      admin
+        .from('organisations')
+        .select('logo_url')
+        .eq('id', user.organisation_id)
+        .single(),
     ])
 
   const pendingCount = awaitingRows.total
@@ -139,12 +175,71 @@ export default async function DashboardPage() {
     cancelled: { label: 'Cancelled', className: 'bg-gray-100 text-gray-600' },
   }
 
+  const lifetimeDocCount = lifetimeDocsResult.count ?? 0
+  const userCount = usersCountResult.count ?? 0
+  const templates = templatesResult.data ?? []
+  const templateCount = templates.length
+  const hasWorkflow = templates.some((t) => {
+    const workflow = t.workflow as Workflow | null
+    return (workflow?.steps?.length ?? 0) > 0
+  })
+  const hasLogo = Boolean(orgResult.data?.logo_url)
+
+  const onboardingItems: OnboardingItem[] = [
+    {
+      id: 'invite',
+      label: 'Invite your team',
+      href: '/dashboard/team',
+      complete: userCount > 1,
+    },
+    {
+      id: 'template',
+      label: 'Create your first template',
+      href: '/dashboard/templates',
+      complete: templateCount > 0,
+    },
+    {
+      id: 'workflow',
+      label: 'Set up an approval chain',
+      href: '/dashboard/templates',
+      complete: hasWorkflow,
+    },
+    {
+      id: 'document',
+      label: 'Send your first document',
+      href: '/dashboard/documents/new',
+      complete: lifetimeDocCount > 0,
+    },
+    {
+      id: 'logo',
+      label: 'Add your organisation logo',
+      href: '/dashboard/settings/organisation',
+      complete: hasLogo,
+    },
+  ]
+
+  const onboardingCompleteCount = onboardingItems.filter((i) => i.complete).length
+  const dismissedAt = user.onboarding_checklist_dismissed_at
+    ? new Date(user.onboarding_checklist_dismissed_at).getTime()
+    : null
+  const sevenDaysMs = 7 * 86400000
+  const dismissExpired =
+    dismissedAt != null &&
+    Date.now() - dismissedAt >= sevenDaysMs &&
+    onboardingCompleteCount < onboardingItems.length
+  const showOnboarding =
+    lifetimeDocCount < 5 &&
+    (dismissedAt == null || dismissExpired) &&
+    onboardingCompleteCount < onboardingItems.length
+
   return (
     <>
       <Header pageTitle="Dashboard" user={user} />
 
       <DashboardPageBody>
       <div className="space-y-8">
+        {planLimits && <PlanUsageBanner limits={planLimits} />}
+
         <div>
           <h2 className="text-2xl font-bold text-signara-navy">
             {getGreeting()}, {user.full_name.split(' ')[0]}
@@ -153,6 +248,8 @@ export default async function DashboardPage() {
             Here&apos;s what&apos;s happening with your documents today.
           </p>
         </div>
+
+        {showOnboarding && <OnboardingChecklist items={onboardingItems} />}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {stats.map((stat) => (

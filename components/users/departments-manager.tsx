@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Loader2, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { ActionIconTooltip } from '@/components/ui/action-icon-tooltip'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -116,17 +117,19 @@ export function DepartmentsManager({ departments, memberCounts }: DepartmentsMan
                 </div>
 
                 {!department.is_executive && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="text-signara-steel hover:text-destructive"
-                    onClick={() => setDeleteTarget({ id: department.id, name: department.name })}
-                    disabled={isPending}
-                    aria-label={`Delete ${department.name}`}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                  <ActionIconTooltip label="Delete department">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="text-signara-steel hover:text-destructive"
+                      onClick={() => setDeleteTarget({ id: department.id, name: department.name })}
+                      disabled={isPending}
+                      aria-label={`Delete ${department.name}`}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </ActionIconTooltip>
                 )}
               </li>
             ))}

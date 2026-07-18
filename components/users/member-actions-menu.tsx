@@ -9,6 +9,7 @@ import {
   setMemberActive,
 } from '@/app/actions/team'
 import { Button } from '@/components/ui/button'
+import { ActionIconTooltip } from '@/components/ui/action-icon-tooltip'
 import {
   Dialog,
   DialogContent,
@@ -121,22 +122,24 @@ export function MemberActionsMenu({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="text-signara-steel hover:text-signara-navy"
-            aria-label={`More actions for ${member.full_name}`}
-            disabled={isPending}
-          >
-            {isPending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <MoreHorizontal className="size-4" />
-            )}
-          </Button>
-        </DropdownMenuTrigger>
+        <ActionIconTooltip label="More actions">
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="text-signara-steel hover:text-signara-navy"
+              aria-label={`More actions for ${member.full_name}`}
+              disabled={isPending}
+            >
+              {isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <MoreHorizontal className="size-4" />
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+        </ActionIconTooltip>
         <DropdownMenuContent align="end" className="w-52">
           {canResendInvite && (
             <DropdownMenuItem onClick={handleResendInvitation}>

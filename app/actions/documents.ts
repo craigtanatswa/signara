@@ -34,6 +34,8 @@ import {
   getDocumentAttachmentPath,
 } from '@/lib/storage/document-attachments'
 import type { OrganisationUserOption, Workflow } from '@/types/workflow'
+import { checkPlanLimits } from '@/lib/billing/limits'
+import { buildPlanLimitReachedDetails } from '@/lib/billing/plan-limit-response'
 import type {
   Template,
   Document,
@@ -348,6 +350,26 @@ export async function createDocumentFromTemplate(input: {
 
   if (!title) {
     return { error: 'Document title is required.' }
+  }
+
+  try {
+    const limits = await checkPlanLimits(profile.organisation_id)
+    if (!limits.documentsOk) {
+      const planLimit = await buildPlanLimitReachedDetails({
+        organisationId: profile.organisation_id,
+        userRole: profile.role,
+        type: 'documents',
+        limits,
+      })
+      return {
+        error:
+          "You've reached your plan's monthly document limit. Upgrade to continue.",
+        planLimit,
+      }
+    }
+  } catch (err) {
+    console.error('[createDocumentFromTemplate] plan limit check failed', err)
+    return { error: 'Could not verify plan limits. Please try again.' }
   }
 
   const { data: templateData, error: templateError } = await supabase

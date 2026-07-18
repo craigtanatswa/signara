@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { resetMemberPassword } from '@/app/actions/team'
 import { isTestUserEmail } from '@/lib/users/test-user'
 import { ErrorMessage } from '@/components/ui/error-message'
+import { ActionIconTooltip } from '@/components/ui/action-icon-tooltip'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -87,16 +88,18 @@ export function ResetPasswordDialog({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="text-signara-steel hover:text-signara-navy"
-        onClick={() => handleOpenChange(true)}
-        aria-label={`Reset password for ${member.full_name}`}
-      >
-        <KeyRound className="size-4" />
-      </Button>
+      <ActionIconTooltip label="Reset password">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="text-signara-steel hover:text-signara-navy"
+          onClick={() => handleOpenChange(true)}
+          aria-label={`Reset password for ${member.full_name}`}
+        >
+          <KeyRound className="size-4" />
+        </Button>
+      </ActionIconTooltip>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent>

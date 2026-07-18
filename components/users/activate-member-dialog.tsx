@@ -5,6 +5,7 @@ import { Loader2, UserCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { activateMember } from '@/app/actions/team'
 import { ErrorMessage } from '@/components/ui/error-message'
+import { ActionIconTooltip } from '@/components/ui/action-icon-tooltip'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -56,16 +57,18 @@ export function ActivateMemberDialog({ member, onSuccess }: ActivateMemberDialog
 
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="text-signara-steel hover:text-signara-gold"
-        onClick={() => handleOpenChange(true)}
-        aria-label={`Activate ${member.full_name}`}
-      >
-        <UserCheck className="size-4" />
-      </Button>
+      <ActionIconTooltip label="Activate account">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="text-signara-steel hover:text-signara-gold"
+          onClick={() => handleOpenChange(true)}
+          aria-label={`Activate ${member.full_name}`}
+        >
+          <UserCheck className="size-4" />
+        </Button>
+      </ActionIconTooltip>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent>

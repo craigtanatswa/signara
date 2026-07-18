@@ -26,6 +26,11 @@ import { cn } from '@/lib/utils'
 import { FillDetailsStep, type FillDetailsStepHandle } from '@/components/documents/wizard-steps/fill-details-step'
 import { AssignApproversStep } from '@/components/documents/wizard-steps/assign-approvers-step'
 import { ReviewSubmitStep, type ReviewFieldEntry } from '@/components/documents/wizard-steps/review-submit-step'
+import { PlanLimitReachedModal } from '@/components/billing/plan-limit-reached-modal'
+import {
+  isPlanLimitReachedPayload,
+  type PlanLimitReachedDetails,
+} from '@/lib/billing/plan-limit-response'
 import type { OrganisationBranding, TiptapDocument } from '@/types/database'
 
 const WIZARD_STEPS = [
@@ -66,6 +71,8 @@ export function InitiationWizard({
   const [shortageWarnings, setShortageWarnings] = useState<string[]>(initialShortageWarnings ?? [])
   const [title, setTitle] = useState(`${templateName} — ${new Date().toLocaleDateString('en-GB')}`)
   const [serverError, setServerError] = useState<string | null>(null)
+  const [planLimitOpen, setPlanLimitOpen] = useState(false)
+  const [planLimitDetails, setPlanLimitDetails] = useState<PlanLimitReachedDetails | null>(null)
   const [emptyStepsWarningOpen, setEmptyStepsWarningOpen] = useState(false)
   const [isRefreshingSteps, startRefreshTransition] = useTransition()
   const [isSubmitting, startSubmitTransition] = useTransition()
@@ -151,6 +158,12 @@ export function InitiationWizard({
       })
 
       if ('error' in result) {
+        if (isPlanLimitReachedPayload(result)) {
+          setPlanLimitDetails(result.planLimit)
+          setPlanLimitOpen(true)
+          setServerError(null)
+          return
+        }
         setServerError(result.error ?? 'Something went wrong. Please try again.')
         return
       }
@@ -306,6 +319,12 @@ export function InitiationWizard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PlanLimitReachedModal
+        open={planLimitOpen}
+        onOpenChange={setPlanLimitOpen}
+        details={planLimitDetails}
+      />
     </>
   )
 }

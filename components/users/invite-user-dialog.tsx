@@ -36,6 +36,11 @@ import {
 import { OverseenDepartmentsField } from '@/components/users/overseen-departments-field'
 import { DepartmentCombobox } from '@/components/users/department-combobox'
 import { createDepartment } from '@/app/actions/departments'
+import { PlanLimitReachedModal } from '@/components/billing/plan-limit-reached-modal'
+import {
+  isPlanLimitReachedPayload,
+  type PlanLimitReachedDetails,
+} from '@/lib/billing/plan-limit-response'
 
 const inviteSchema = z.object({
   full_name: z.string().min(2, { message: 'Full name must be at least 2 characters' }),
@@ -73,6 +78,8 @@ export function InviteUserDialog({
   const [createdCredentials, setCreatedCredentials] = useState<CreatedCredentials | null>(null)
   const [copiedField, setCopiedField] = useState<'email' | 'password' | 'all' | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
+  const [planLimitOpen, setPlanLimitOpen] = useState(false)
+  const [planLimitDetails, setPlanLimitDetails] = useState<PlanLimitReachedDetails | null>(null)
   const [overseenDepartmentIds, setOverseenDepartmentIds] = useState<string[]>([])
   const [departments, setDepartments] = useState(initialDepartments)
 
@@ -166,6 +173,12 @@ export function InviteUserDialog({
     const data = await response.json()
 
     if (!response.ok) {
+      if (isPlanLimitReachedPayload(data)) {
+        setPlanLimitDetails(data.planLimit)
+        setPlanLimitOpen(true)
+        setServerError(null)
+        return
+      }
       setServerError(data.error ?? 'Something went wrong. Please try again.')
       return
     }
@@ -506,6 +519,11 @@ export function InviteUserDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <PlanLimitReachedModal
+        open={planLimitOpen}
+        onOpenChange={setPlanLimitOpen}
+        details={planLimitDetails}
+      />
     </>
   )
 }

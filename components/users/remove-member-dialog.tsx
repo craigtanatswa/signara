@@ -5,6 +5,7 @@ import { Loader2, UserMinus } from 'lucide-react'
 import { toast } from 'sonner'
 import { removeMember } from '@/app/actions/team'
 import { ErrorMessage } from '@/components/ui/error-message'
+import { ActionIconTooltip } from '@/components/ui/action-icon-tooltip'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -64,16 +65,18 @@ export function RemoveMemberDialog({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="text-signara-steel hover:text-destructive"
-        onClick={() => handleOpenChange(true)}
-        aria-label={`Remove ${member.full_name}`}
-      >
-        <UserMinus className="size-4" />
-      </Button>
+      <ActionIconTooltip label="Remove member">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="text-signara-steel hover:text-destructive"
+          onClick={() => handleOpenChange(true)}
+          aria-label={`Remove ${member.full_name}`}
+        >
+          <UserMinus className="size-4" />
+        </Button>
+      </ActionIconTooltip>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent>

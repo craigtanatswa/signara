@@ -2,14 +2,19 @@ export interface Plan {
   id: string
   name: string
   max_users: number | null
-  max_documents: number | null
+  max_documents_per_month: number | null
   price_usd: number | null
+  price_zwg: number | null
+  features: string[] | null
   created_at: string
 }
 
 import type { BrandTheme } from '@/lib/brand-themes'
 import type { Workflow } from '@/types/workflow'
 import type { JobLevel } from '@/types/org-structure'
+
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled'
+export type PaymentMethod = 'none' | 'paynow'
 
 export interface Organisation {
   id: string
@@ -20,6 +25,12 @@ export interface Organisation {
   brand_theme: BrandTheme
   plan_id: string | null
   trial_ends_at: string | null
+  subscription_status?: SubscriptionStatus
+  payment_method?: PaymentMethod
+  paynow_renewal_date?: string | null
+  paynow_reference?: string | null
+  /** Set when org downgrades — must upgrade to this tier (or higher) to use the app. */
+  minimum_plan_id?: string | null
   /** Soft-archive completed/rejected docs older than this many months (default 12). */
   archive_policy_months?: number
   created_at: string
@@ -60,6 +71,8 @@ export interface User {
   must_change_password: boolean
   /** False when an admin has deactivated the account — blocks login. */
   is_active: boolean
+  /** When the user dismissed the dashboard onboarding checklist. */
+  onboarding_checklist_dismissed_at?: string | null
   created_at: string
   updated_at: string
 }

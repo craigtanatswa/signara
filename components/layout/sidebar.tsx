@@ -44,9 +44,11 @@ const navItems: NavItem[] = [
 interface SidebarProps {
   user: User
   organisation: Organisation
+  /** When set, the Settings nav item uses this href (e.g. billing while upgrade required). */
+  settingsHref?: string
 }
 
-export function Sidebar({ user, organisation }: SidebarProps) {
+export function Sidebar({ user, organisation, settingsHref }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -111,14 +113,18 @@ export function Sidebar({ user, organisation }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
         {visibleItems.map((item) => {
+          const href =
+            item.href === '/dashboard/settings' && settingsHref
+              ? settingsHref
+              : item.href
           const isActive =
-            item.href === '/dashboard'
+            href === '/dashboard'
               ? pathname === '/dashboard'
-              : pathname.startsWith(item.href)
+              : pathname.startsWith(href)
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={href}
               className={cn(
                 'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                 isActive

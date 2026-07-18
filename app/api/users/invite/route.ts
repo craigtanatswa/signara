@@ -13,6 +13,8 @@ import { validateUserPlacement } from '@/lib/org-structure/validation'
 import { validateOverseenDepartments } from '@/lib/org-structure/overseen-departments'
 import { syncUserOverseenDepartments } from '@/lib/org-structure/load-overseen'
 import { JOB_LEVELS } from '@/types/org-structure'
+import { checkPlanLimits } from '@/lib/billing/limits'
+import { buildPlanLimitReachedDetails } from '@/lib/billing/plan-limit-response'
 
 function generateTestEmail(fullName: string): string {
   const slug =
@@ -64,6 +66,24 @@ export async function POST(request: NextRequest) {
 
     if (currentUser.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden: admin access required' }, { status: 403 })
+    }
+
+    const limits = await checkPlanLimits(currentUser.organisation_id)
+    if (!limits.usersOk) {
+      const planLimit = await buildPlanLimitReachedDetails({
+        organisationId: currentUser.organisation_id,
+        userRole: currentUser.role,
+        type: 'users',
+        limits,
+      })
+      return NextResponse.json(
+        {
+          error:
+            "You've reached your plan's user limit. Upgrade to add more team members.",
+          planLimit,
+        },
+        { status: 403 }
+      )
     }
 
     // 3. Validate request body

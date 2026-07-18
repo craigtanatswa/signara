@@ -8,6 +8,7 @@ export type NotificationType =
   | 'template_request'
   | 'template_request_fulfilled'
   | 'template_request_dismissed'
+  | 'billing'
 
 export interface NotificationAction {
   href: string
@@ -59,6 +60,11 @@ export function getNotificationAction(
       return {
         href: '/dashboard/documents/new',
         label: 'Start a document',
+      }
+    case 'billing':
+      return {
+        href: '/dashboard/settings/billing',
+        label: 'View billing',
       }
     default:
       return null

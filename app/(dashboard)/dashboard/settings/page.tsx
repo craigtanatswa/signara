@@ -57,7 +57,7 @@ export default async function SettingsPage() {
       title: 'Plan & Billing',
       description: 'View your current plan and billing information.',
       adminOnly: false,
-      placeholder: true,
+      placeholder: false,
     },
   ]
 
