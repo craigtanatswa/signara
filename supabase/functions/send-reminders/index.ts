@@ -167,7 +167,7 @@ Deno.serve(async (req) => {
         /\/$/,
         ''
       )
-      const documentUrl = `${appUrl || 'https://app.signara.com'}/dashboard/documents/${document.id}`
+      const documentUrl = `${appUrl || 'https://signaraflow.com'}/dashboard/documents/${document.id}`
       const email = buildApprovalNeededEmail({
         approverName: approver.full_name,
         documentTitle: document.title,

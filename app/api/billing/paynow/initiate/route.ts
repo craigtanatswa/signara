@@ -2,16 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { initiatePaynowTransaction } from '@/lib/billing/paynow'
+import { resolvePublicAppUrl } from '@/lib/app-url'
 
 const initiateSchema = z.object({
   planId: z.enum(['starter', 'growth', 'enterprise']),
 })
-
-function getAppUrl(): string {
-  const url = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
-  if (!url) throw new Error('NEXT_PUBLIC_APP_URL is not configured')
-  return url
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,7 +58,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Plan is not available for purchase' }, { status: 400 })
     }
 
-    const appUrl = getAppUrl()
+    const appUrl = resolvePublicAppUrl(request)
     const result = await initiatePaynowTransaction({
       organisationId: currentUser.organisation_id,
       planId,

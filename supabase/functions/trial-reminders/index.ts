@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     const appUrl = (
       Deno.env.get('APP_URL') ??
       Deno.env.get('NEXT_PUBLIC_APP_URL') ??
-      'https://app.signara.com'
+      'https://signaraflow.com'
     ).replace(/\/$/, '')
 
     let processed = 0
