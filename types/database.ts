@@ -73,6 +73,8 @@ export interface User {
   is_active: boolean
   /** When the user dismissed the dashboard onboarding checklist. */
   onboarding_checklist_dismissed_at?: string | null
+  /** Preferred email for billing receipts (defaults to account email). */
+  billing_receipt_email?: string | null
   created_at: string
   updated_at: string
 }
