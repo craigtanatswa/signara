@@ -52,17 +52,12 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  const isRootRoute = pathname === '/'
   const isAuthRoute = pathname === '/login' || pathname === '/register'
   const isDashboardRoute = pathname.startsWith('/dashboard')
   const isChangePasswordRoute = pathname === '/change-password'
 
-  // Redirect root to dashboard if logged in, otherwise to login
-  if (isRootRoute) {
-    const url = request.nextUrl.clone()
-    url.pathname = user ? '/dashboard' : '/login'
-    return NextResponse.redirect(url)
-  }
+  // `/` is the public marketing page for everyone. Signed-in visitors get a
+  // "Go to dashboard" CTA rendered by the landing page instead of a redirect.
 
   if (isDashboardRoute && !user && !isServerAction) {
     const url = request.nextUrl.clone()

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/sidebar'
+import { AppViewport } from '@/components/layout/app-viewport'
 import { PlanUpgradeRequiredGate } from '@/components/billing/plan-upgrade-required-gate'
 import { getPlanUpgradeLock } from '@/lib/billing/plan-upgrade-lock'
 import { DEFAULT_BRAND_THEME, isBrandTheme } from '@/lib/brand-themes'
@@ -96,22 +97,24 @@ export default async function DashboardLayout({
     : null
 
   return (
-    <div
-      data-brand-theme={brandTheme}
-      className="flex min-h-0 flex-1 overflow-hidden bg-signara-background"
-    >
-      <PlanUpgradeRequiredGate lock={upgradeLock} isAdmin={user.role === 'admin'}>
-        <Sidebar
-          user={user}
-          organisation={organisation}
-          settingsHref={
-            upgradeLock ? '/dashboard/settings/billing' : '/dashboard/settings'
-          }
-        />
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
-        </div>
-      </PlanUpgradeRequiredGate>
-    </div>
+    <AppViewport>
+      <div
+        data-brand-theme={brandTheme}
+        className="flex min-h-0 flex-1 overflow-hidden bg-signara-background"
+      >
+        <PlanUpgradeRequiredGate lock={upgradeLock} isAdmin={user.role === 'admin'}>
+          <Sidebar
+            user={user}
+            organisation={organisation}
+            settingsHref={
+              upgradeLock ? '/dashboard/settings/billing' : '/dashboard/settings'
+            }
+          />
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
+          </div>
+        </PlanUpgradeRequiredGate>
+      </div>
+    </AppViewport>
   )
 }

@@ -28,11 +28,11 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full overflow-hidden antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
     >
-      <body className="flex h-full min-h-0 flex-col overflow-hidden">
+      <body className="min-h-dvh">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
+          {children}
           <Toaster />
         </ThemeProvider>
       </body>
