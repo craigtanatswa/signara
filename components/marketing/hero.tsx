@@ -23,7 +23,7 @@ export function Hero({ isAuthenticated }: { isAuthenticated: boolean }) {
           <h1 className="mt-6 font-display text-4xl font-semibold leading-[1.06] tracking-tight text-signara-navy sm:text-5xl xl:text-[3.75rem]">
             Replace the paper chase with{' '}
             <span className="relative whitespace-nowrap">
-              approvals
+              digital approvals
               <span
                 aria-hidden
                 className="absolute inset-x-0 -bottom-1 h-[3px] rounded-full bg-signara-gold"
