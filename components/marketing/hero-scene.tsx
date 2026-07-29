@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import {
+  BRAND_SIGNATURE_PATH,
+  measureSignaturePath,
+  paintBrandSignature,
+} from './brand-signature'
 
 const SHEET_W = 1.5
 const SHEET_H = 2
@@ -14,8 +19,8 @@ const STEEL = '#A1A8A2'
 const SETTLE_DURATION = 1.5
 const SETTLE_STAGGER = 0.13
 const SIGN_START = 1.95
-const SIGN_DURATION = 2
-const SEAL_START = 3.85
+const SIGN_DURATION = 2.6
+const SEAL_START = 4.55
 const SEAL_DURATION = 0.75
 
 interface Pose {
@@ -51,96 +56,39 @@ const TEXT_ROWS = [
   { y: -0.28, width: 0.92 },
 ]
 
-const SIGNATURE_W = 1.15
-const SIGNATURE_H = 0.32
+const SIGNATURE_W = 1.12
+const SIGNATURE_H = 0.784
+const SIGNATURE_CANVAS_W = 720
+const SIGNATURE_CANVAS_H = 504
 
-/** Hand-drawn "J.Smith" on a transparent canvas — letterforms stay readable. */
+/** Prefer a slower capital S, then a quicker finish through the flourish. */
+function signatureEase(t: number) {
+  const p = clamp01(t)
+  if (p < 0.34) return easeInOutSine(p / 0.34) * 0.3
+  if (p < 0.76) return 0.3 + ((p - 0.34) / 0.42) * 0.48
+  return 0.78 + easeOutCubic((p - 0.76) / 0.24) * 0.22
+}
+
+/** Calligraphic "Signara" drawn as one continuous stroke onto a canvas texture. */
 function createSignatureTexture() {
   const canvas = document.createElement('canvas')
-  canvas.width = 640
-  canvas.height = 168
+  canvas.width = SIGNATURE_CANVAS_W
+  canvas.height = SIGNATURE_CANVAS_H
   const ctx = canvas.getContext('2d')!
 
+  const pathLength = measureSignaturePath(BRAND_SIGNATURE_PATH)
+  const scale = Math.min(
+    (SIGNATURE_CANVAS_W - 48) / 620,
+    (SIGNATURE_CANVAS_H - 48) / 280
+  )
+  const transform = {
+    scale,
+    offsetX: (SIGNATURE_CANVAS_W - 620 * scale) / 2,
+    offsetY: (SIGNATURE_CANVAS_H - 280 * scale) / 2,
+  }
+
   const paint = (progress: number) => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.save()
-    ctx.beginPath()
-    ctx.rect(0, 0, canvas.width * Math.max(progress, 0.001), canvas.height)
-    ctx.clip()
-
-    // Slight rightward slant so it reads as a signature, not typed text.
-    ctx.transform(1, 0, -0.18, 1, 28, 0)
-
-    ctx.strokeStyle = GOLD
-    ctx.fillStyle = GOLD
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
-    ctx.lineWidth = 9
-
-    // J
-    ctx.beginPath()
-    ctx.moveTo(24, 52)
-    ctx.lineTo(96, 52)
-    ctx.moveTo(72, 52)
-    ctx.lineTo(72, 128)
-    ctx.quadraticCurveTo(72, 152, 36, 148)
-    ctx.stroke()
-
-    // .
-    ctx.beginPath()
-    ctx.arc(118, 138, 6, 0, Math.PI * 2)
-    ctx.fill()
-
-    // S — start upper-right, left bowl, cross, right bowl (classic S, not a 2)
-    ctx.beginPath()
-    ctx.moveTo(210, 78)
-    ctx.bezierCurveTo(190, 62, 150, 66, 142, 88)
-    ctx.bezierCurveTo(136, 104, 156, 112, 178, 116)
-    ctx.bezierCurveTo(210, 122, 222, 132, 216, 146)
-    ctx.bezierCurveTo(208, 164, 164, 166, 146, 150)
-    ctx.stroke()
-
-    // m — three clear humps
-    ctx.beginPath()
-    ctx.moveTo(236, 150)
-    ctx.lineTo(236, 98)
-    ctx.bezierCurveTo(236, 78, 268, 78, 268, 98)
-    ctx.lineTo(268, 150)
-    ctx.moveTo(268, 98)
-    ctx.bezierCurveTo(268, 78, 300, 78, 300, 98)
-    ctx.lineTo(300, 150)
-    ctx.moveTo(300, 98)
-    ctx.bezierCurveTo(300, 78, 332, 78, 332, 98)
-    ctx.lineTo(332, 150)
-    ctx.stroke()
-
-    // i
-    ctx.beginPath()
-    ctx.moveTo(354, 150)
-    ctx.lineTo(354, 98)
-    ctx.stroke()
-    ctx.beginPath()
-    ctx.arc(354, 76, 5.5, 0, Math.PI * 2)
-    ctx.fill()
-
-    // t
-    ctx.beginPath()
-    ctx.moveTo(384, 150)
-    ctx.lineTo(384, 48)
-    ctx.moveTo(360, 90)
-    ctx.lineTo(410, 88)
-    ctx.stroke()
-
-    // h — open arch on the right
-    ctx.beginPath()
-    ctx.moveTo(432, 150)
-    ctx.lineTo(432, 48)
-    ctx.moveTo(432, 98)
-    ctx.bezierCurveTo(452, 76, 488, 76, 500, 98)
-    ctx.lineTo(500, 150)
-    ctx.stroke()
-
-    ctx.restore()
+    paintBrandSignature(ctx, pathLength, progress, GOLD, transform)
   }
 
   paint(0)
@@ -149,7 +97,12 @@ function createSignatureTexture() {
   texture.anisotropy = 4
   texture.needsUpdate = true
 
-  return { canvas, texture, paint }
+  const paintAndMark = (progress: number) => {
+    paint(progress)
+    texture.needsUpdate = true
+  }
+
+  return { canvas, texture, paint: paintAndMark }
 }
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value))
@@ -243,6 +196,7 @@ function Documents() {
       }),
       signature: new THREE.MeshBasicMaterial({
         map: assets.signatureTexture,
+        color: '#ffffff',
         transparent: true,
         depthWrite: false,
         toneMapped: false,
@@ -299,12 +253,11 @@ function Documents() {
       )
     })
 
-    const stroke = easeInOutSine(clamp01((elapsed - SIGN_START) / SIGN_DURATION))
-    const paintStep = Math.round(stroke * 40) / 40
+    const stroke = signatureEase(clamp01((elapsed - SIGN_START) / SIGN_DURATION))
+    const paintStep = Math.round(stroke * 72) / 72
     if (paintStep !== lastPaint.current) {
       lastPaint.current = paintStep
       assets.paintSignature(paintStep)
-      assets.signatureTexture.needsUpdate = true
     }
     if (signatureMesh.current) {
       signatureMesh.current.visible = stroke > 0.01
@@ -370,7 +323,7 @@ function Documents() {
                 ref={signatureMesh}
                 geometry={assets.signaturePlane}
                 material={materials.signature}
-                position={[0.05, -0.54, 0.028]}
+                position={[0.02, -0.48, 0.03]}
                 visible={false}
               />
             )}
@@ -393,6 +346,10 @@ function Documents() {
 
 export default function HeroScene() {
   const [inView, setInView] = useState(true)
+  // Keep the loop alive through the settle → sign → seal intro even if the
+  // IntersectionObserver briefly reports the canvas as offscreen (common in
+  // headless / first-layout frames).
+  const [introPlaying, setIntroPlaying] = useState(true)
   const wrapper = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -406,12 +363,20 @@ export default function HeroScene() {
     return () => observer.disconnect()
   }, [])
 
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setIntroPlaying(false),
+      (SEAL_START + SEAL_DURATION + 1.2) * 1000
+    )
+    return () => window.clearTimeout(timer)
+  }, [])
+
   return (
     <div ref={wrapper} className="h-full w-full">
       <Canvas
         flat
         dpr={[1, 1.75]}
-        frameloop={inView ? 'always' : 'demand'}
+        frameloop={inView || introPlaying ? 'always' : 'demand'}
         camera={{ position: [0, 0.15, 6.2], fov: 36 }}
         gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
         className="pointer-events-none"
