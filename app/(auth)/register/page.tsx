@@ -117,12 +117,12 @@ export default function RegisterPage() {
 
         <div className="space-y-1.5">
           <Label htmlFor="email" className="text-signara-navy font-medium">
-            Work email
+            Email
           </Label>
           <Input
             id="email"
             type="email"
-            placeholder="jane@company.com"
+            placeholder="jane@email.com"
             autoComplete="email"
             {...register('email')}
             aria-invalid={!!errors.email}
