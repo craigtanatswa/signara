@@ -3,15 +3,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { generateTempPassword } from '@/lib/utils'
-// DEV ONLY: invitation email disabled while testing approval flows without Resend.
-// import { resend } from '@/lib/email/resend'
-// import { buildInvitationEmail } from '@/lib/email/templates/invitation'
-// import { getResendFromAddress } from '@/lib/email/config'
-
+import { generateInviteToken, inviteExpiresAt } from '@/lib/auth/invite-token'
+import { getAppBaseUrl } from '@/lib/app-url'
+import { sendTransactionalEmail } from '@/lib/email/send'
+import { buildInvitationEmail } from '@/lib/email/templates/invitation'
 import { validateUserPlacement } from '@/lib/org-structure/validation'
 import { validateOverseenDepartments } from '@/lib/org-structure/overseen-departments'
-import { syncUserOverseenDepartments } from '@/lib/org-structure/load-overseen'
 import { JOB_LEVELS } from '@/types/org-structure'
 import { checkPlanLimits } from '@/lib/billing/limits'
 import { buildPlanLimitReachedDetails } from '@/lib/billing/plan-limit-response'
@@ -24,6 +21,10 @@ function generateTestEmail(fullName: string): string {
       .replace(/^-|-$/g, '')
       .slice(0, 30) || 'user'
   return `${slug}-${randomUUID().slice(0, 8)}@test.signara.local`
+}
+
+function isTestUserEmail(email: string): boolean {
+  return email.toLowerCase().endsWith('@test.signara.local')
 }
 
 const inviteSchema = z.object({
@@ -43,7 +44,6 @@ const inviteSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Verify session
     const supabase = await createClient()
     const {
       data: { user: authUser },
@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // 2. Verify admin role
     const { data: currentUser, error: currentUserError } = await supabase
       .from('users')
       .select('*, organisations(name)')
@@ -86,7 +85,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 3. Validate request body
     const body = await request.json()
     const parsed = inviteSchema.safeParse(body)
     if (!parsed.success) {
@@ -141,7 +139,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: overseenError }, { status: 400 })
     }
 
-    const departmentRecord = (departments ?? []).find((d) => d.id === department_id)
     const { data: existingUser } = await supabase
       .from('users')
       .select('id')
@@ -153,109 +150,74 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User already exists in this organisation' }, { status: 400 })
     }
 
-    // 5. Generate temp password
-    const tempPassword = generateTempPassword()
+    const { data: existingInvite } = await supabase
+      .from('organisation_invites')
+      .select('id')
+      .eq('organisation_id', currentUser.organisation_id)
+      .ilike('email', email)
+      .is('accepted_at', null)
+      .maybeSingle()
 
-    // 6. Create auth user via admin client
-    const adminSupabase = await createAdminClient()
-    const { data: newAuthData, error: createAuthError } = await adminSupabase.auth.admin.createUser({
-      email,
-      password: tempPassword,
-      email_confirm: true,
-      user_metadata: { full_name },
-    })
-
-    if (createAuthError || !newAuthData.user) {
+    if (existingInvite) {
       return NextResponse.json(
-        { error: createAuthError?.message ?? 'Failed to create auth user' },
-        { status: 500 }
+        { error: 'An open invitation already exists for this email' },
+        { status: 400 }
       )
     }
 
-    const newUserId = newAuthData.user.id
-    const orgName = (currentUser.organisations as { name: string } | null)?.name ?? 'your organisation'
+    const token = generateInviteToken()
+    const expires_at = inviteExpiresAt(14)
+    const adminSupabase = createAdminClient()
 
-    // 7. Insert into users table
-    const { error: insertUserError } = await adminSupabase.from('users').insert({
-      id: newUserId,
+    const { error: inviteError } = await adminSupabase.from('organisation_invites').insert({
+      organisation_id: currentUser.organisation_id,
       email,
       full_name,
       position,
-      organisation_id: currentUser.organisation_id,
       role,
       department_id,
       job_level,
-      department: departmentRecord?.name ?? null,
-      must_change_password: true,
+      overseen_department_ids,
+      token,
+      invited_by: currentUser.id,
+      expires_at,
     })
 
-    if (insertUserError) {
-      // Roll back auth user
-      await adminSupabase.auth.admin.deleteUser(newUserId)
-      return NextResponse.json(
-        { error: insertUserError.message },
-        { status: 500 }
-      )
+    if (inviteError) {
+      return NextResponse.json({ error: inviteError.message }, { status: 500 })
     }
 
-    const syncResult = await syncUserOverseenDepartments(adminSupabase, {
-      userId: newUserId,
-      organisationId: currentUser.organisation_id,
-      overseenDepartmentIds: overseen_department_ids,
-    })
+    const orgName =
+      (currentUser.organisations as { name: string } | null)?.name ?? 'your organisation'
+    const inviteUrl = `${getAppBaseUrl()}/join/invite/${token}`
 
-    if (syncResult.error) {
-      await adminSupabase.from('users').delete().eq('id', newUserId)
-      await adminSupabase.auth.admin.deleteUser(newUserId)
-      return NextResponse.json({ error: syncResult.error }, { status: 500 })
+    if (isTestUserEmail(email) || !process.env.RESEND_API_KEY) {
+      return NextResponse.json({
+        success: true,
+        message: 'Invitation created',
+        email,
+        inviteUrl,
+        delivery: 'manual' as const,
+      })
     }
 
-    // 8. Insert welcome notification
-    await adminSupabase.from('notifications').insert({
-      user_id: newUserId,
-      type: 'welcome',
-      title: 'Welcome to Signara',
-      message: `You've been added to ${orgName}. Sign in with your temporary password.`,
+    const { subject, html } = buildInvitationEmail({
+      recipientName: full_name.split(' ')[0] ?? full_name,
+      orgName,
+      email,
+      inviteUrl,
+      inviterName: currentUser.full_name,
+      expiresAt: expires_at,
     })
 
-    // DEV ONLY: invitation email disabled — return credentials for local testing.
-    // const loginUrl = process.env.NEXT_PUBLIC_APP_URL
-    //   ? `${process.env.NEXT_PUBLIC_APP_URL}/login`
-    //   : 'http://localhost:3000/login'
-    //
-    // const { subject, html } = buildInvitationEmail({
-    //   recipientName: full_name.split(' ')[0],
-    //   orgName,
-    //   email,
-    //   tempPassword,
-    //   loginUrl,
-    //   inviterName: currentUser.full_name,
-    // })
-    //
-    // const { data: emailData, error: emailError } = await resend.emails.send({
-    //   from: getResendFromAddress(),
-    //   to: email,
-    //   subject,
-    //   html,
-    // })
-    //
-    // if (emailError) {
-    //   console.error('[invite] Resend error:', emailError)
-    //   return NextResponse.json(
-    //     {
-    //       error:
-    //         emailError.message ??
-    //         'User was created but the invitation email could not be sent. Check Resend domain verification.',
-    //     },
-    //     { status: 502 }
-    //   )
-    // }
+    await sendTransactionalEmail({ to: email, subject, html })
 
     return NextResponse.json({
       success: true,
-      message: 'Member created',
+      message: 'Invitation sent',
       email,
-      tempPassword,
+      inviteUrl,
+      delivery: 'email' as const,
     })
   } catch (err) {
     console.error('[invite] Unexpected error:', err)

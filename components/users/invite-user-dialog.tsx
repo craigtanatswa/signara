@@ -56,10 +56,11 @@ const inviteSchema = z.object({
 
 type InviteFormValues = z.infer<typeof inviteSchema>
 
-interface CreatedCredentials {
+interface CreatedInvite {
   fullName: string
   email: string
-  tempPassword: string
+  inviteUrl: string
+  delivery: 'manual' | 'email'
 }
 
 interface InviteUserDialogProps {
@@ -75,8 +76,8 @@ export function InviteUserDialog({
 }: InviteUserDialogProps) {
   const [open, setOpen] = useState(false)
   const [credentialsOpen, setCredentialsOpen] = useState(false)
-  const [createdCredentials, setCreatedCredentials] = useState<CreatedCredentials | null>(null)
-  const [copiedField, setCopiedField] = useState<'email' | 'password' | 'all' | null>(null)
+  const [createdInvite, setCreatedInvite] = useState<CreatedInvite | null>(null)
+  const [copiedField, setCopiedField] = useState<'email' | 'link' | 'all' | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
   const [planLimitOpen, setPlanLimitOpen] = useState(false)
   const [planLimitDetails, setPlanLimitDetails] = useState<PlanLimitReachedDetails | null>(null)
@@ -141,7 +142,7 @@ export function InviteUserDialog({
     }
   }, [selectedJobLevel])
 
-  async function copyToClipboard(text: string, field: 'email' | 'password' | 'all') {
+  async function copyToClipboard(text: string, field: 'email' | 'link' | 'all') {
     try {
       await navigator.clipboard.writeText(text)
       setCopiedField(field)
@@ -153,7 +154,7 @@ export function InviteUserDialog({
 
   function handleCredentialsClose() {
     setCredentialsOpen(false)
-    setCreatedCredentials(null)
+    setCreatedInvite(null)
     setCopiedField(null)
   }
 
@@ -195,15 +196,19 @@ export function InviteUserDialog({
     setOpen(false)
     onSuccess()
 
-    if (data.email && data.tempPassword) {
-      setCreatedCredentials({
+    if (data.email && data.inviteUrl) {
+      setCreatedInvite({
         fullName: values.full_name,
         email: data.email,
-        tempPassword: data.tempPassword,
+        inviteUrl: data.inviteUrl,
+        delivery: data.delivery === 'email' ? 'email' : 'manual',
       })
       setCredentialsOpen(true)
+      if (data.delivery === 'email') {
+        toast.success(`Invitation emailed to ${data.email}`)
+      }
     } else {
-      toast.success(`${values.full_name} added to your team.`)
+      toast.success(`Invitation created for ${values.full_name}.`)
     }
   }
 
@@ -427,21 +432,22 @@ export function InviteUserDialog({
       <Dialog open={credentialsOpen} onOpenChange={(isOpen) => !isOpen && handleCredentialsClose()}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle className="text-signara-navy">Test user created</DialogTitle>
+            <DialogTitle className="text-signara-navy">Invitation ready</DialogTitle>
             <DialogDescription className="text-signara-steel">
-              Save these login details for {createdCredentials?.fullName}. They will not be shown
-              again.
+              {createdInvite?.delivery === 'email'
+                ? `An email was sent to ${createdInvite.email}. You can also copy the invite link below.`
+                : `Share this invite link with ${createdInvite?.fullName}. It will not be emailed automatically.`}
             </DialogDescription>
           </DialogHeader>
 
-          {createdCredentials && (
+          {createdInvite && (
             <div className="space-y-4 py-2">
               <div className="space-y-1.5">
                 <Label className="text-signara-navy font-medium">Email</Label>
                 <div className="flex gap-2">
                   <Input
                     readOnly
-                    value={createdCredentials.email}
+                    value={createdInvite.email}
                     className="border-signara-steel bg-signara-background font-mono text-sm"
                   />
                   <Button
@@ -449,7 +455,7 @@ export function InviteUserDialog({
                     variant="outline"
                     size="icon"
                     className="shrink-0 border-signara-navy text-signara-navy hover:bg-signara-navy hover:text-white"
-                    onClick={() => copyToClipboard(createdCredentials.email, 'email')}
+                    onClick={() => copyToClipboard(createdInvite.email, 'email')}
                     aria-label="Copy email"
                   >
                     {copiedField === 'email' ? (
@@ -462,22 +468,22 @@ export function InviteUserDialog({
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-signara-navy font-medium">Temporary password</Label>
+                <Label className="text-signara-navy font-medium">Invite link</Label>
                 <div className="flex gap-2">
                   <Input
                     readOnly
-                    value={createdCredentials.tempPassword}
-                    className="border-signara-steel bg-signara-background font-mono text-sm"
+                    value={createdInvite.inviteUrl}
+                    className="border-signara-steel bg-signara-background font-mono text-xs"
                   />
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
                     className="shrink-0 border-signara-navy text-signara-navy hover:bg-signara-navy hover:text-white"
-                    onClick={() => copyToClipboard(createdCredentials.tempPassword, 'password')}
-                    aria-label="Copy password"
+                    onClick={() => copyToClipboard(createdInvite.inviteUrl, 'link')}
+                    aria-label="Copy invite link"
                   >
-                    {copiedField === 'password' ? (
+                    {copiedField === 'link' ? (
                       <Check className="size-4" />
                     ) : (
                       <Copy className="size-4" />
@@ -492,7 +498,7 @@ export function InviteUserDialog({
                 className="w-full border-signara-navy text-signara-navy hover:bg-signara-navy hover:text-white"
                 onClick={() =>
                   copyToClipboard(
-                    `Email: ${createdCredentials.email}\nPassword: ${createdCredentials.tempPassword}`,
+                    `Email: ${createdInvite.email}\nInvite: ${createdInvite.inviteUrl}`,
                     'all'
                   )
                 }
@@ -505,7 +511,7 @@ export function InviteUserDialog({
                 ) : (
                   <>
                     <Copy className="mr-2 size-4" />
-                    Copy all login details
+                    Copy email and link
                   </>
                 )}
               </Button>

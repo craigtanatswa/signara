@@ -214,6 +214,7 @@ async function main() {
         position: person.position,
         must_change_password: false,
         is_active: true,
+        onboarding_completed_at: new Date().toISOString(),
       },
       { onConflict: 'id' }
     )

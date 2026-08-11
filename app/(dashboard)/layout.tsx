@@ -1,3 +1,4 @@
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/sidebar'
@@ -41,6 +42,15 @@ export default async function DashboardLayout({
     redirect('/change-password')
   }
 
+  const pathname = (await headers()).get('x-pathname') ?? ''
+  const needsOnboarding =
+    userProfile.role === 'admin' && !userProfile.onboarding_completed_at
+  const onOnboardingRoute = pathname.startsWith('/dashboard/onboarding')
+
+  if (needsOnboarding && (pathname === '/dashboard' || pathname === '/dashboard/')) {
+    redirect('/dashboard/onboarding')
+  }
+
   const orgForTrial = userProfile.organisations as Organisation | null
 
   const user: User = {
@@ -56,6 +66,7 @@ export default async function DashboardLayout({
     job_level: userProfile.job_level,
     must_change_password: userProfile.must_change_password,
     is_active: userProfile.is_active !== false,
+    onboarding_completed_at: userProfile.onboarding_completed_at ?? null,
     created_at: userProfile.created_at,
     updated_at: userProfile.updated_at,
   }
@@ -96,6 +107,19 @@ export default async function DashboardLayout({
       })
     : null
 
+  if (needsOnboarding && onOnboardingRoute) {
+    return (
+      <AppViewport>
+        <div
+          data-brand-theme={brandTheme}
+          className="flex min-h-0 flex-1 overflow-hidden bg-signara-background"
+        >
+          <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</main>
+        </div>
+      </AppViewport>
+    )
+  }
+
   return (
     <AppViewport>
       <div
@@ -111,6 +135,17 @@ export default async function DashboardLayout({
             }
           />
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {needsOnboarding && (
+              <div className="flex items-center justify-between gap-3 border-b border-signara-gold/40 bg-signara-gold/15 px-4 py-2 text-sm text-signara-navy">
+                <span>Finish organisation setup to unlock your full dashboard.</span>
+                <a
+                  href="/dashboard/onboarding"
+                  className="font-semibold text-signara-navy underline-offset-2 hover:underline"
+                >
+                  Continue setup
+                </a>
+              </div>
+            )}
             <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
           </div>
         </PlanUpgradeRequiredGate>

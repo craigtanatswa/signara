@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS users (
   must_change_password boolean NOT NULL DEFAULT false,
   is_active boolean NOT NULL DEFAULT true,
   onboarding_checklist_dismissed_at timestamptz,
+  onboarding_completed_at timestamptz,
   billing_receipt_email text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -342,6 +343,85 @@ CREATE TABLE IF NOT EXISTS billing_receipt_emails (
 CREATE INDEX IF NOT EXISTS billing_receipt_emails_user_last_used_idx
   ON billing_receipt_emails (user_id, last_used_at DESC);
 
+-- ─── Organisation invites (email-specific) ───────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS organisation_invites (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organisation_id uuid NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+  email text NOT NULL,
+  full_name text NOT NULL,
+  position text,
+  role text NOT NULL CHECK (role IN ('admin', 'member')),
+  department_id uuid REFERENCES departments(id) ON DELETE SET NULL,
+  job_level text NOT NULL DEFAULT 'staff'
+    CHECK (job_level IN (
+      'managing_director',
+      'director',
+      'manager',
+      'supervisor',
+      'senior',
+      'staff'
+    )),
+  overseen_department_ids uuid[] NOT NULL DEFAULT '{}',
+  token text NOT NULL UNIQUE,
+  invited_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  expires_at timestamptz NOT NULL,
+  accepted_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS organisation_invites_org_idx
+  ON organisation_invites (organisation_id);
+
+CREATE INDEX IF NOT EXISTS organisation_invites_email_idx
+  ON organisation_invites (organisation_id, lower(email));
+
+-- ─── Shareable join links ────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS organisation_join_links (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organisation_id uuid NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+  token text NOT NULL UNIQUE,
+  created_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  default_role text NOT NULL DEFAULT 'member'
+    CHECK (default_role IN ('admin', 'member')),
+  max_uses integer CHECK (max_uses IS NULL OR max_uses > 0),
+  approved_count integer NOT NULL DEFAULT 0 CHECK (approved_count >= 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  revoked_at timestamptz
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS organisation_join_links_one_active_per_org
+  ON organisation_join_links (organisation_id)
+  WHERE is_active = true AND revoked_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS organisation_join_links_org_idx
+  ON organisation_join_links (organisation_id);
+
+-- ─── Join requests from shareable links ──────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS organisation_join_requests (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organisation_id uuid NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+  join_link_id uuid NOT NULL REFERENCES organisation_join_links(id) ON DELETE CASCADE,
+  email text NOT NULL,
+  full_name text NOT NULL,
+  auth_user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  status text NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'approved', 'rejected')),
+  reviewed_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS organisation_join_requests_one_pending_email
+  ON organisation_join_requests (organisation_id, lower(email))
+  WHERE status = 'pending';
+
+CREATE INDEX IF NOT EXISTS organisation_join_requests_org_status_idx
+  ON organisation_join_requests (organisation_id, status);
+
 -- ─── Helper RPCs ─────────────────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION get_org_document_count_this_month(org_id uuid)
@@ -451,6 +531,9 @@ ALTER TABLE user_signatures ENABLE ROW LEVEL SECURITY;
 ALTER TABLE template_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billing_payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billing_receipt_emails ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organisation_invites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organisation_join_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organisation_join_requests ENABLE ROW LEVEL SECURITY;
 
 -- Plans: readable by authenticated users (billing UI)
 DROP POLICY IF EXISTS "Authenticated can read plans" ON plans;
@@ -727,6 +810,42 @@ DROP POLICY IF EXISTS billing_payments_select_own ON billing_payments;
 CREATE POLICY billing_payments_select_own
   ON billing_payments FOR SELECT
   USING (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Org admins manage invites" ON organisation_invites;
+CREATE POLICY "Org admins manage invites"
+ON organisation_invites FOR ALL TO authenticated
+USING (
+  organisation_id = public.current_user_organisation_id()
+  AND public.current_user_is_org_admin()
+)
+WITH CHECK (
+  organisation_id = public.current_user_organisation_id()
+  AND public.current_user_is_org_admin()
+);
+
+DROP POLICY IF EXISTS "Org admins manage join links" ON organisation_join_links;
+CREATE POLICY "Org admins manage join links"
+ON organisation_join_links FOR ALL TO authenticated
+USING (
+  organisation_id = public.current_user_organisation_id()
+  AND public.current_user_is_org_admin()
+)
+WITH CHECK (
+  organisation_id = public.current_user_organisation_id()
+  AND public.current_user_is_org_admin()
+);
+
+DROP POLICY IF EXISTS "Org admins manage join requests" ON organisation_join_requests;
+CREATE POLICY "Org admins manage join requests"
+ON organisation_join_requests FOR ALL TO authenticated
+USING (
+  organisation_id = public.current_user_organisation_id()
+  AND public.current_user_is_org_admin()
+)
+WITH CHECK (
+  organisation_id = public.current_user_organisation_id()
+  AND public.current_user_is_org_admin()
+);
 
 -- ─── Storage buckets ─────────────────────────────────────────────────────────
 

@@ -5,7 +5,15 @@ import { Header } from '@/components/layout/header'
 import { DashboardPageBody } from '@/components/layout/dashboard-page-body'
 import { TeamClient } from '@/components/users/team-client'
 import { DepartmentsManager } from '@/components/users/departments-manager'
-import type { User, UserWithDepartment } from '@/types/database'
+import { JoinLinkPanel } from '@/components/users/join-link-panel'
+import { JoinRequestsPanel } from '@/components/users/join-requests-panel'
+import type {
+  OrganisationInvite,
+  OrganisationJoinLink,
+  OrganisationJoinRequest,
+  User,
+  UserWithDepartment,
+} from '@/types/database'
 import type { DepartmentOption } from '@/types/org-structure'
 import { getMemberDepartmentIdsForCounts } from '@/lib/org-structure/overseen-departments'
 
@@ -29,21 +37,46 @@ export default async function TeamPage() {
 
   const currentUser = userProfile as User
 
-  const [{ data: teamMembers, error: teamMembersError }, { data: departments }, overseenIdsByUser] =
-    await Promise.all([
-      supabase
-        .from('users')
-        .select('*')
-        .eq('organisation_id', currentUser.organisation_id)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('departments')
-        .select('id, name, slug, is_executive')
-        .eq('organisation_id', currentUser.organisation_id)
-        .order('is_executive', { ascending: false })
-        .order('name'),
-      loadOverseenDepartmentIdsByUser(supabase, currentUser.organisation_id),
-    ])
+  const [
+    { data: teamMembers, error: teamMembersError },
+    { data: departments },
+    overseenIdsByUser,
+    { data: pendingInvites },
+    { data: joinLink },
+    { data: joinRequests },
+  ] = await Promise.all([
+    supabase
+      .from('users')
+      .select('*')
+      .eq('organisation_id', currentUser.organisation_id)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('departments')
+      .select('id, name, slug, is_executive')
+      .eq('organisation_id', currentUser.organisation_id)
+      .order('is_executive', { ascending: false })
+      .order('name'),
+    loadOverseenDepartmentIdsByUser(supabase, currentUser.organisation_id),
+    supabase
+      .from('organisation_invites')
+      .select('*')
+      .eq('organisation_id', currentUser.organisation_id)
+      .is('accepted_at', null)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('organisation_join_links')
+      .select('*')
+      .eq('organisation_id', currentUser.organisation_id)
+      .eq('is_active', true)
+      .is('revoked_at', null)
+      .maybeSingle(),
+    supabase
+      .from('organisation_join_requests')
+      .select('*')
+      .eq('organisation_id', currentUser.organisation_id)
+      .order('created_at', { ascending: false })
+      .limit(40),
+  ])
 
   const departmentList = (departments ?? []) as DepartmentOption[]
   const departmentsById = new Map(departmentList.map((d) => [d.id, d]))
@@ -57,7 +90,11 @@ export default async function TeamPage() {
     return {
       ...(member as UserWithDepartment),
       departments: departmentRecord
-        ? { id: departmentRecord.id, name: departmentRecord.name, is_executive: departmentRecord.is_executive }
+        ? {
+            id: departmentRecord.id,
+            name: departmentRecord.name,
+            is_executive: departmentRecord.is_executive,
+          }
         : null,
       overseen_departments: overseenIds
         .map((id) => departmentsById.get(id))
@@ -77,7 +114,12 @@ export default async function TeamPage() {
 
   const totalCount = members.length
   const adminCount = members.filter((m) => m.role === 'admin').length
-  const pendingCount = members.filter((m) => m.must_change_password).length
+  const pendingInviteCount = (pendingInvites ?? []).length
+  const pendingJoinCount = (joinRequests ?? []).filter((r) => r.status === 'pending').length
+  const pendingCount =
+    members.filter((m) => m.must_change_password).length +
+    pendingInviteCount +
+    pendingJoinCount
 
   return (
     <>
@@ -89,7 +131,7 @@ export default async function TeamPage() {
             {[
               { label: 'Total members', value: totalCount },
               { label: 'Admins', value: adminCount },
-              { label: 'Pending setup', value: pendingCount },
+              { label: 'Pending', value: pendingCount },
             ].map((stat) => (
               <div
                 key={stat.label}
@@ -100,6 +142,12 @@ export default async function TeamPage() {
               </div>
             ))}
           </div>
+
+          <JoinLinkPanel link={(joinLink as OrganisationJoinLink | null) ?? null} />
+          <JoinRequestsPanel
+            pendingInvites={(pendingInvites ?? []) as OrganisationInvite[]}
+            joinRequests={(joinRequests ?? []) as OrganisationJoinRequest[]}
+          />
 
           <DepartmentsManager departments={departmentList} memberCounts={memberCounts} />
           {teamMembersError && (

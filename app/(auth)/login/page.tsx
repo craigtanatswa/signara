@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { finishPendingRegistration } from '@/app/actions/auth'
 import { Button } from '@/components/ui/button'
 import { ErrorMessage } from '@/components/ui/error-message'
 import { Input } from '@/components/ui/input'
@@ -32,6 +33,13 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search)
     if (params.get('error') === 'deactivated') {
       setServerError(DEACTIVATED_MESSAGE)
+      return
+    }
+    if (params.get('error') === 'verify') {
+      setServerError(
+        params.get('message') ||
+          'Email verification failed or expired. Please try signing in or register again.'
+      )
     }
   }, [])
 
@@ -53,6 +61,16 @@ export default function LoginPage() {
     })
 
     if (error) {
+      const message = error.message.toLowerCase()
+      if (
+        message.includes('email not confirmed') ||
+        message.includes('confirm your email')
+      ) {
+        setServerError(
+          'Please verify your email before signing in. Check your inbox for the confirmation link.'
+        )
+        return
+      }
       setServerError(error.message)
       return
     }
@@ -64,9 +82,26 @@ export default function LoginPage() {
     if (user) {
       const { data: profile } = await supabase
         .from('users')
-        .select('must_change_password, is_active')
+        .select('must_change_password, is_active, role, onboarding_completed_at')
         .eq('id', user.id)
         .single()
+
+      if (!profile) {
+        const meta = user.user_metadata ?? {}
+        if (meta.signup_intent === 'register_organisation') {
+          const result = await finishPendingRegistration()
+          if (!result.success) {
+            setServerError(result.error)
+            await supabase.auth.signOut()
+          }
+          return
+        }
+        setServerError(
+          'Your account is not fully set up yet. Open the verification link from your email, or contact support.'
+        )
+        await supabase.auth.signOut()
+        return
+      }
 
       if (profile?.is_active === false) {
         await supabase.auth.signOut()
@@ -76,6 +111,12 @@ export default function LoginPage() {
 
       if (profile?.must_change_password) {
         router.push('/change-password')
+        return
+      }
+
+      if (profile.role === 'admin' && !profile.onboarding_completed_at) {
+        router.push('/dashboard/onboarding')
+        router.refresh()
         return
       }
     }

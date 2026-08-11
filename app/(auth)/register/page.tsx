@@ -25,6 +25,7 @@ const registerSchema = z
       .string()
       .min(8, { message: 'Password must be at least 8 characters' }),
     confirmPassword: z.string(),
+    isManagingDirector: z.boolean().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords do not match',
@@ -42,6 +43,9 @@ export default function RegisterPage() {
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
+    defaultValues: {
+      isManagingDirector: false,
+    },
   })
 
   async function onSubmit(values: RegisterFormValues) {
@@ -51,6 +55,7 @@ export default function RegisterPage() {
       fullName: values.fullName,
       email: values.email,
       password: values.password,
+      isManagingDirector: values.isManagingDirector === true,
     })
 
     if (!result.success) {
@@ -170,6 +175,21 @@ export default function RegisterPage() {
             </p>
           )}
         </div>
+
+        <label className="flex items-start gap-3 rounded-lg border border-signara-steel/30 bg-signara-background/60 p-3 text-sm text-signara-navy">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 rounded border-signara-steel accent-signara-gold"
+            {...register('isManagingDirector')}
+          />
+          <span>
+            <span className="font-medium">I am the Managing Director</span>
+            <span className="mt-0.5 block text-signara-steel">
+              Optional. Leave unchecked if you are a systems admin — the MD can
+              be assigned later on the Team page.
+            </span>
+          </span>
+        </label>
 
         {serverError && <ErrorMessage>{serverError}</ErrorMessage>}
 

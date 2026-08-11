@@ -73,6 +73,8 @@ export interface User {
   is_active: boolean
   /** When the user dismissed the dashboard onboarding checklist. */
   onboarding_checklist_dismissed_at?: string | null
+  /** When the forced onboarding wizard was completed (admins only gated). */
+  onboarding_completed_at?: string | null
   /** Preferred email for billing receipts (defaults to account email). */
   billing_receipt_email?: string | null
   created_at: string
@@ -82,6 +84,51 @@ export interface User {
 export type UserWithDepartment = User & {
   departments?: Pick<Department, 'id' | 'name' | 'is_executive'> | null
   overseen_departments?: Pick<Department, 'id' | 'name'>[]
+}
+
+export interface OrganisationInvite {
+  id: string
+  organisation_id: string
+  email: string
+  full_name: string
+  position: string | null
+  role: 'admin' | 'member'
+  department_id: string | null
+  job_level: JobLevel
+  overseen_department_ids: string[]
+  token: string
+  invited_by: string | null
+  expires_at: string
+  accepted_at: string | null
+  created_at: string
+}
+
+export interface OrganisationJoinLink {
+  id: string
+  organisation_id: string
+  token: string
+  created_by: string | null
+  is_active: boolean
+  default_role: 'admin' | 'member'
+  max_uses: number | null
+  approved_count: number
+  created_at: string
+  revoked_at: string | null
+}
+
+export type JoinRequestStatus = 'pending' | 'approved' | 'rejected'
+
+export interface OrganisationJoinRequest {
+  id: string
+  organisation_id: string
+  join_link_id: string
+  email: string
+  full_name: string
+  auth_user_id: string | null
+  status: JoinRequestStatus
+  reviewed_by: string | null
+  reviewed_at: string | null
+  created_at: string
 }
 
 // ─── Tiptap document types ───────────────────────────────────────────────────

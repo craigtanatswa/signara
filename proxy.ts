@@ -52,9 +52,14 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  const isAuthRoute = pathname === '/login' || pathname === '/register'
+  const isAuthRoute =
+    pathname === '/login' ||
+    pathname === '/register' ||
+    pathname.startsWith('/register/')
   const isDashboardRoute = pathname.startsWith('/dashboard')
   const isChangePasswordRoute = pathname === '/change-password'
+  const isJoinRoute = pathname.startsWith('/join')
+  const isAuthCallback = pathname.startsWith('/auth/callback')
 
   // `/` is the public marketing page for everyone. Signed-in visitors get a
   // "Go to dashboard" CTA rendered by the landing page instead of a redirect.
@@ -65,7 +70,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (isAuthRoute && user) {
+  // Don't bounce authenticated users off join/accept or email-verify flows.
+  if (isAuthRoute && user && !isJoinRoute && !isAuthCallback) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
